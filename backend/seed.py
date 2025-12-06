@@ -2,6 +2,7 @@
 import uuid
 from backend.database import init_db, SessionLocal
 from backend.models import Document, Card, CardType, MacroTopic, MicroTopic
+from sqlalchemy.orm import Session
 
 
 def seed():
@@ -102,5 +103,65 @@ def seed():
         db.close()
 
 
+def backfill_macro_micro(db: Session):
+    """Backfill existing cards into Macro/Micro by splitting legacy combined topic.
+
+    Rules:
+    - Split on ' - ': left → macro, right → micro.
+    - If split fails: macro='Uncategorized', micro='General'.
+    - Upsert MacroTopic(document_id,name) and MicroTopic(macro_topic_id,name,document_id).
+    - Assign Card.micro_topic_id accordingly.
+    - Exclude obvious project items by keywords.
+    """
+    EXCLUDE = ["student project", "project options", "assignment", "proposal"]
+    documents = db.query(Document).all()
+    for doc in documents:
+        macro_map = {m.name.lower(): m for m in db.query(MacroTopic).filter(MacroTopic.document_id == doc.id).all()}
+        micro_map = {(mi.macro_topic_id, mi.name.lower()): mi for mi in db.query(MicroTopic).filter(MicroTopic.document_id == doc.id).all()}
+        cards = db.query(Card).filter(Card.document_id == doc.id).all()
+        for card in cards:
+            # Skip already linked cards
+            if getattr(card, 'micro_topic_id', None):
+                continue
+            t = (card.topic or '').strip()
+            macro_name, micro_name = 'Uncategorized', 'General'
+            if ' - ' in t:
+                left, right = t.split(' - ', 1)
+                macro_name = left.strip() or 'Uncategorized'
+                micro_name = right.strip() or 'General'
+            # Exclusions
+            if any(k in (macro_name + ' ' + micro_name).lower() for k in EXCLUDE):
+                continue
+            # Upsert macro
+            mkey = macro_name.lower()
+            macro = macro_map.get(mkey)
+            if not macro:
+                macro = MacroTopic(name=macro_name, document_id=doc.id)
+                db.add(macro)
+                db.flush()
+                macro_map[mkey] = macro
+            # Upsert micro
+            mikey = (macro.id, micro_name.lower())
+            micro = micro_map.get(mikey)
+            if not micro:
+                micro = MicroTopic(name=micro_name, macro_topic_id=macro.id, document_id=doc.id)
+                db.add(micro)
+                db.flush()
+                micro_map[mikey] = micro
+            # Assign
+            card.micro_topic_id = micro.id
+        db.commit()
+
+
 if __name__ == "__main__":
-    seed()
+    import sys
+    init_db()
+    db = SessionLocal()
+    try:
+        if len(sys.argv) > 1 and sys.argv[1] == "backfill":
+            backfill_macro_micro(db)
+            print("✓ Backfilled macro/micro topics for existing cards.")
+        else:
+            seed()
+    finally:
+        db.close()
