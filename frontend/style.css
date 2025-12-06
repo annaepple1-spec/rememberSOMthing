@@ -124,6 +124,41 @@ h2 {
 
 .browse-filters select {
     padding: 6px 8px;
+}
+
+/* Browse layout improvements */
+.macro-section {
+    margin-top: 10px;
+}
+
+.micro-section {
+    margin-top: 8px;
+}
+
+.count-badge {
+    font-size: 0.85em;
+    color: #777;
+    margin-left: 6px;
+}
+
+.cards-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+@media (min-width: 700px) {
+    .cards-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
 
 .document-section {
     margin-bottom: 30px;

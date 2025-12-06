@@ -441,23 +441,24 @@ function renderFilteredBrowse(filtered) {
                 `;
                 m.micro_topics.forEach(mi => {
                     html += `
-                        <div class="topic-section">
-                            <div class="topic-header">📚 ${escapeHtml(mi.micro_topic_name)} <span class="muted">(${mi.card_count} cards)</span></div>
+                        <div class="topic-section micro-section">
+                            <div class="topic-header">📚 ${escapeHtml(mi.micro_topic_name)} <span class="count-badge">(${mi.card_count} cards)</span></div>
+                            <div class="cards-grid">
                     `;
                     (mi.cards || []).forEach(card => {
-                        const typeClass = `card-type-${card.type}`;
+                        const typeClass = `card-type-${(card.type || '').toLowerCase()}`;
                         html += `
                             <div class="card-item">
-                                <div>
-                                    <span class="card-type-badge ${typeClass}">${card.type}</span>
-                                    <span class="card-difficulty">Difficulty: ${card.difficulty || 'N/A'}</span>
+                                <div class="card-header">
+                                    <span class="card-type-badge ${typeClass}">${(card.type || '').toLowerCase()}</span>
+                                    <span class="card-difficulty">Difficulty: ${(card.difficulty || 'N/A')}</span>
                                 </div>
-                                <div class="card-front">Q: ${escapeHtml(card.front)}</div>
-                                <div class="card-back">A: ${escapeHtml(card.back)}</div>
+                                <div class="card-front">Q: ${escapeHtml(card.front || '')}</div>
+                                <div class="card-back">A: ${escapeHtml(card.back || '')}</div>
                             </div>
                         `;
                     });
-                    html += `</div>`;
+                    html += `</div></div>`;
                 });
                 html += `</div>`;
             });
@@ -466,23 +467,24 @@ function renderFilteredBrowse(filtered) {
             html += `<div class="document-info">Total Cards: ${total}</div>`;
             for (const topic of doc.topics) {
                 html += `
-                    <div class="topic-section">
-                        <div class="topic-header">📚 ${escapeHtml(topic.name)}</div>
+                    <div class="topic-section micro-section">
+                        <div class="topic-header">📚 ${escapeHtml(topic.name)} <span class="count-badge">(${(topic.cards?.length || 0)} cards)</span></div>
+                        <div class="cards-grid">
                 `;
                 for (const card of topic.cards) {
-                    const typeClass = `card-type-${card.type}`;
+                    const typeClass = `card-type-${(card.type || '').toLowerCase()}`;
                     html += `
                         <div class="card-item">
-                            <div>
-                                <span class="card-type-badge ${typeClass}">${card.type}</span>
-                                <span class="card-difficulty">Difficulty: ${card.difficulty || 'N/A'}</span>
+                            <div class="card-header">
+                                <span class="card-type-badge ${typeClass}">${(card.type || '').toLowerCase()}</span>
+                                <span class="card-difficulty">Difficulty: ${(card.difficulty || 'N/A')}</span>
                             </div>
-                            <div class="card-front">Q: ${escapeHtml(card.front)}</div>
-                            <div class="card-back">A: ${escapeHtml(card.back)}</div>
+                            <div class="card-front">Q: ${escapeHtml(card.front || '')}</div>
+                            <div class="card-back">A: ${escapeHtml(card.back || '')}</div>
                         </div>
                     `;
                 }
-                html += `</div>`;
+                html += `</div></div>`;
             }
         }
         html += `</div>`;
