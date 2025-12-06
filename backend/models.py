@@ -31,7 +31,10 @@ class Card(Base):
 
     id = Column(String, primary_key=True)
     document_id = Column(String, ForeignKey("documents.id"), nullable=False)
+    # Legacy combined topic string (e.g., "Macro - Micro"). Kept for backfill traceability.
     topic = Column(String, nullable=True)
+    # New hierarchy linkage: optional micro topic id
+    micro_topic_id = Column(Integer, ForeignKey("micro_topics.id"), nullable=True)
     type = Column(Enum(CardType), nullable=False)
     front = Column(Text, nullable=False)
     back = Column(Text, nullable=False)
@@ -39,6 +42,7 @@ class Card(Base):
 
     # Relationship
     document = relationship("Document", back_populates="cards")
+    micro_topic = relationship("MicroTopic", back_populates="cards")
 
 
 class UserCardState(Base):
@@ -67,3 +71,29 @@ class Review(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
     score = Column(Integer, nullable=False)
     latency_ms = Column(Integer, nullable=False)
+
+
+class MacroTopic(Base):
+    """Top-level topic grouping for a document (e.g., MRP, Aggregate Planning)."""
+    __tablename__ = "macro_topics"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    document_id = Column(String, ForeignKey("documents.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    micro_topics = relationship("MicroTopic", back_populates="macro_topic", cascade="all, delete-orphan")
+
+
+class MicroTopic(Base):
+    """Second-level topic grouping under a macro (e.g., BOM Structure under MRP)."""
+    __tablename__ = "micro_topics"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    macro_topic_id = Column(Integer, ForeignKey("macro_topics.id"), nullable=False)
+    document_id = Column(String, ForeignKey("documents.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    macro_topic = relationship("MacroTopic", back_populates="micro_topics")
+    cards = relationship("Card", back_populates="micro_topic")

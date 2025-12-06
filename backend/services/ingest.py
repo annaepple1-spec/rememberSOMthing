@@ -29,8 +29,10 @@ def _fallback_generate_cards_from_text(full_text: str, document_id: str) -> List
         front="Summarize the main ideas of this document.",
         back=truncated,
     ))
-
-    cards.append(Card(
+            macros = deck.get("macros") or []
+            # If macros are missing, fall back to legacy 'topics'
+            if not macros:
+                return _legacy_topics_to_cards(deck, document_id)
         id=str(uuid.uuid4()),
         document_id=document_id,
         topic="Key Concepts",
@@ -93,6 +95,116 @@ def _deck_to_cards(deck: dict, document_id: str) -> List[Card]:
                         labels = ["A", "B", "C", "D", "E", "F"]
                         opts_rendered = []
                         for i, opt in enumerate(options):
+            # Simple exclusion keywords for non-flashcard project items
+            EXCLUDE = ["student project", "project options", "assignment", "proposal", "deliverable"]
+
+            # Upsert helpers (in-memory cache per document)
+            macro_cache = {}
+            micro_cache = {}
+
+            def upsert_macro(name: str) -> MacroTopic:
+                key = name.strip().lower()
+                if key in macro_cache:
+                    return macro_cache[key]
+                mt = MacroTopic(name=name.strip(), document_id=document_id)
+                macro_cache[key] = mt
+                return mt
+
+            def upsert_micro(macro: MacroTopic, name: str) -> MicroTopic:
+                key = (macro.name.strip().lower(), name.strip().lower())
+                if key in micro_cache:
+                    return micro_cache[key]
+                mct = MicroTopic(name=name.strip(), macro_topic_id=None, document_id=document_id)  # macro id linked on flush
+                micro_cache[key] = mct
+                return mct
+
+            for macro in macros:
+                macro_name = (macro.get("name") or "Uncategorized").strip()
+                if any(k in macro_name.lower() for k in EXCLUDE):
+                    continue
+                mt = upsert_macro(macro_name)
+                micros = macro.get("micros") or []
+                for micro in micros:
+                    micro_name = (micro.get("name") or "General").strip()
+                    if any(k in micro_name.lower() for k in EXCLUDE):
+                        continue
+                    mct = upsert_micro(mt, micro_name)
+                    concepts = micro.get("concepts") or []
+                    for concept in concepts:
+                        concept_name = concept.get("name") or "Concept"
+                        flashcards = concept.get("flashcards") or []
+                        for fc in flashcards:
+                            fc_type = (fc.get("type") or "definition").lower()
+                            try:
+                                card_type = CardType(fc_type)
+                            except Exception:
+                                card_type = CardType.definition
+                            front = fc.get("front") or ""
+                            back = fc.get("back") or ""
+                            diff_label = (fc.get("difficulty") or "medium").lower()
+                            base_diff = 0.5 if diff_label == "medium" else 0.2 if diff_label == "easy" else 0.8
+                            cards.append(
+                                Card(
+                                    id=str(uuid.uuid4()),
+                                    document_id=document_id,
+                                    topic=f"{macro_name} - {micro_name}",  # legacy trace
+                                    micro_topic=mct,
+                                    type=card_type,
+                                    front=front,
+                                    back=back,
+                                    base_difficulty=base_diff,
+                                )
+                            )
+
+            # Return macro/micro entities first so session can persist relationships alongside cards
+            return list(macro_cache.values()) + list(micro_cache.values()) + cards
+
+
+        def _legacy_topics_to_cards(deck: dict, document_id: str):
+            """Legacy path when deck contains 'topics' only."""
+            cards = []
+            topics = deck.get("topics") or []
+            if not topics:
+                from uuid import uuid4
+                return [
+                    Card(
+                        id=str(uuid4()),
+                        document_id=document_id,
+                        topic="Uncategorized - General",
+                        type=CardType.definition,
+                        front=f"What is the main idea of '{deck.get('document_title', 'Untitled')}'?",
+                        back="A study document to learn SCM/Operations concepts.",
+                        base_difficulty=0.5,
+                    )
+                ]
+            for topic in topics:
+                topic_name = topic.get("name") or "Uncategorized"
+                concepts = topic.get("concepts") or []
+                for concept in concepts:
+                    concept_name = concept.get("name") or "General"
+                    flashcards = concept.get("flashcards") or []
+                    for fc in flashcards:
+                        fc_type = (fc.get("type") or "definition").lower()
+                        try:
+                            card_type = CardType(fc_type)
+                        except Exception:
+                            card_type = CardType.definition
+                        front = fc.get("front") or ""
+                        back = fc.get("back") or ""
+                        diff_label = (fc.get("difficulty") or "medium").lower()
+                        base_diff = 0.5 if diff_label == "medium" else 0.2 if diff_label == "easy" else 0.8
+                        cards.append(
+                            Card(
+                                id=str(uuid.uuid4()),
+                                document_id=document_id,
+                                topic=f"{topic_name} - {concept_name}",
+                                type=card_type,
+                                front=front,
+                                back=back,
+                                base_difficulty=base_diff,
+                            )
+                        )
+            return cards
                             label = labels[i] if i < len(labels) else str(i + 1)
                             opts_rendered.append(f"{label}) {opt}")
                         front = front + "\nOptions:\n" + "\n".join(opts_rendered)
