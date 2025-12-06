@@ -276,20 +276,24 @@ async function loadAllCards() {
         }
         
         const data = await response.json();
+        // cache raw data for client-side filtering
+        window.__browseData = data;
         
         if (!data.documents || data.documents.length === 0) {
             browseContent.innerHTML = "<p class='info'>No cards found. Upload a PDF to get started!</p>";
             return;
         }
         
-        // Build HTML for all documents
+        // Populate filters and compute filtered view
+        populateBrowseFilters(data);
+        const filtered = applyBrowseFilters(data);
         let html = "";
         
-        for (const doc of data.documents) {
+        for (const doc of filtered.documents) {
             html += `
                 <div class="document-section">
-                    <div class="document-header">${escapeHtml(doc.title)}</div>
-                    <div class="document-info">Document ID: ${doc.document_id} | Total Cards: ${doc.total_cards}</div>
+                    <div class="document-header">${escapeHtml(doc.title || doc.name)}</div>
+                    <div class="document-info">${doc.document_id ? `Document ID: ${doc.document_id} | ` : ''}Total Cards: ${doc.total_cards ?? doc.topics.reduce((acc,t)=>acc+(t.cards?.length||0),0)}</div>
             `;
             
             // Add topics and cards
@@ -326,6 +330,104 @@ async function loadAllCards() {
         console.error("Error loading cards:", error);
         browseContent.innerHTML = `<p class='error'>Error loading cards: ${error.message}</p>`;
     }
+}
+
+function populateBrowseFilters(data) {
+    const docSel = document.getElementById('filterDocument');
+    const topicSel = document.getElementById('filterTopic');
+    const typeSel = document.getElementById('filterType');
+    const diffSel = document.getElementById('filterDifficulty');
+
+    if (!docSel || !topicSel || !typeSel || !diffSel) return;
+
+    const docOptions = ['<option value="">All Documents</option>'];
+    data.documents.forEach(d => {
+        const name = d.title || d.name;
+        docOptions.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
+    });
+    docSel.innerHTML = docOptions.join('');
+
+    const topicsSet = new Set();
+    data.documents.forEach(d => d.topics.forEach(t => topicsSet.add(t.name)));
+    const topicOptions = ['<option value="">All Topics</option>', ...Array.from(topicsSet).map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`)];
+    topicSel.innerHTML = topicOptions.join('');
+
+    ['filterDocument','filterTopic','filterType','filterDifficulty'].forEach(id => {
+        const el = document.getElementById(id);
+        el.onchange = () => {
+            const filtered = applyBrowseFilters(window.__browseData);
+            renderFilteredBrowse(filtered);
+        };
+    });
+}
+
+function applyBrowseFilters(data) {
+    const docValue = document.getElementById('filterDocument')?.value || '';
+    const topicValue = document.getElementById('filterTopic')?.value || '';
+    const typeValue = document.getElementById('filterType')?.value || '';
+    const diffValue = document.getElementById('filterDifficulty')?.value || '';
+
+    const filtered = { documents: [] };
+    data.documents.forEach(d => {
+        const name = d.title || d.name;
+        if (docValue && name !== docValue) return;
+        const newDoc = { title: d.title, name: d.name, document_id: d.document_id, topics: [] };
+        d.topics.forEach(t => {
+            if (topicValue && t.name !== topicValue) return;
+            const newTopic = { name: t.name, cards: [] };
+            t.cards.forEach(c => {
+                if (typeValue && c.type !== typeValue) return;
+                if (diffValue && (c.difficulty || '').toLowerCase() !== diffValue) return;
+                newTopic.cards.push(c);
+            });
+            if (newTopic.cards.length) newDoc.topics.push(newTopic);
+        });
+        if (newDoc.topics.length) filtered.documents.push(newDoc);
+    });
+    return filtered;
+}
+
+function renderFilteredBrowse(filtered) {
+    const browseContent = document.getElementById("browseContent");
+    let html = "";
+    for (const doc of filtered.documents) {
+        html += `
+            <div class="document-section">
+                <div class="document-header">${escapeHtml(doc.title || doc.name)}</div>
+                <div class="document-info">${doc.document_id ? `Document ID: ${doc.document_id} | ` : ''}Total Cards: ${doc.topics.reduce((acc,t)=>acc+(t.cards?.length||0),0)}</div>
+        `;
+        for (const topic of doc.topics) {
+            html += `
+                <div class="topic-section">
+                    <div class="topic-header">📚 ${escapeHtml(topic.name)}</div>
+            `;
+            for (const card of topic.cards) {
+                const typeClass = `card-type-${card.type}`;
+                html += `
+                    <div class="card-item">
+                        <div>
+                            <span class="card-type-badge ${typeClass}">${card.type}</span>
+                            <span class="card-difficulty">Difficulty: ${card.difficulty || 'N/A'}</span>
+                        </div>
+                        <div class="card-front">Q: ${escapeHtml(card.front)}</div>
+                        <div class="card-back">A: ${escapeHtml(card.back)}</div>
+                    </div>
+                `;
+            }
+            html += `</div>`;
+        }
+        html += `</div>`;
+    }
+    browseContent.innerHTML = html || "<p class='info'>No cards match the selected filters.</p>";
+}
+
+function clearBrowseFilters() {
+    ['filterDocument','filterTopic','filterType','filterDifficulty'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    const filtered = applyBrowseFilters(window.__browseData || {documents: []});
+    renderFilteredBrowse(filtered);
 }
 
 /**

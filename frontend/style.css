@@ -114,6 +114,17 @@ h2 {
     margin-top: 20px;
 }
 
+.browse-filters {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.browse-filters select {
+    padding: 6px 8px;
+
 .document-section {
     margin-bottom: 30px;
     border: 1px solid #e0e0e0;

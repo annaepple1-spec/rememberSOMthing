@@ -56,6 +56,24 @@
             <div id="browse-tab" class="tab-panel">
                 <h2>Browse All Cards</h2>
                 <p class="tab-description">View all generated flashcards organized by document and topic.</p>
+                <div class="browse-filters">
+                    <select id="filterDocument"></select>
+                    <select id="filterTopic"></select>
+                    <select id="filterType">
+                        <option value="">All Types</option>
+                        <option value="definition">Definition</option>
+                        <option value="cloze">Cloze</option>
+                        <option value="application">Application</option>
+                        <option value="mcq">MCQ</option>
+                    </select>
+                    <select id="filterDifficulty">
+                        <option value="">All Difficulty</option>
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                    <button class="secondary-button" onclick="clearBrowseFilters()">Clear Filters</button>
+                </div>
                 <div id="browseContent" class="browse-content"></div>
             </div>
 
