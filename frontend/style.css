@@ -159,6 +159,21 @@ h2 {
     align-items: center;
     gap: 8px;
     margin-bottom: 6px;
+}
+
+/* Collapsible micro sections */
+.micro-section.collapsed .cards-grid {
+    display: none;
+}
+.micro-section .toggle-btn {
+    float: right;
+    font-size: 0.85em;
+    background: transparent;
+    color: #1976d2;
+    border: 1px solid #1976d2;
+    border-radius: 999px;
+    padding: 2px 8px;
+    cursor: pointer;
 
 .document-section {
     margin-bottom: 30px;

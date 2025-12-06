@@ -441,8 +441,10 @@ function renderFilteredBrowse(filtered) {
                 `;
                 m.micro_topics.forEach(mi => {
                     html += `
-                        <div class="topic-section micro-section">
-                            <div class="topic-header">📚 ${escapeHtml(mi.micro_topic_name)} <span class="count-badge">(${mi.card_count} cards)</span></div>
+                        <div class="topic-section micro-section" data-micro="${escapeHtml(mi.micro_topic_name)}">
+                            <div class="topic-header">📚 ${escapeHtml(mi.micro_topic_name)} <span class="count-badge">(${mi.card_count} cards)</span>
+                                <button class="toggle-btn" onclick="toggleMicroSection(this)">Hide</button>
+                            </div>
                             <div class="cards-grid">
                     `;
                     (mi.cards || []).forEach(card => {
@@ -467,8 +469,10 @@ function renderFilteredBrowse(filtered) {
             html += `<div class="document-info">Total Cards: ${total}</div>`;
             for (const topic of doc.topics) {
                 html += `
-                    <div class="topic-section micro-section">
-                        <div class="topic-header">📚 ${escapeHtml(topic.name)} <span class="count-badge">(${(topic.cards?.length || 0)} cards)</span></div>
+                    <div class="topic-section micro-section" data-topic="${escapeHtml(topic.name)}">
+                        <div class="topic-header">📚 ${escapeHtml(topic.name)} <span class="count-badge">(${(topic.cards?.length || 0)} cards)</span>
+                            <button class="toggle-btn" onclick="toggleMicroSection(this)">Hide</button>
+                        </div>
                         <div class="cards-grid">
                 `;
                 for (const card of topic.cards) {
@@ -499,6 +503,13 @@ function clearBrowseFilters() {
     });
     const filtered = applyBrowseFilters(window.__browseData || {documents: []});
     renderFilteredBrowse(filtered);
+}
+
+function toggleMicroSection(btn) {
+    const section = btn.closest('.micro-section');
+    if (!section) return;
+    const collapsed = section.classList.toggle('collapsed');
+    btn.textContent = collapsed ? 'Show' : 'Hide';
 }
 
 /**
