@@ -102,18 +102,18 @@ def _build_tasks(
     topic_outline_task = Task(
         description=(
             "Step 1: Define 4–8 Macro Topics and their Micro Topics (concept groups).\n\n"
-            "CRITICAL: Slides may be fragmented; SYNTHESIZE and INTERPRET. Avoid project/assignment items.\n\n"
+            "CRITICAL: Source material may be fragmented; SYNTHESIZE and INTERPRET. Avoid project/assignment items.\n\n"
             "Document: {{document_title}}\n"
             "Content: {{document_text}}\n\n"
-            "Macro topics should align with SCM operations such as: 'MRP', 'Aggregate Planning', 'Lot Sizing', 'Independent vs Dependent Demand'.\n"
-            "Under each macro, list 3–7 Micro Topics (e.g., for MRP: 'MRP Process', 'BOM Structure', 'Inventory Optimization', 'Customer Satisfaction').\n\n"
+            "Macro topics should reflect the document's domain (e.g., for history: 'Industrial Revolution', for biology: 'Cell Structure', for math: 'Linear Algebra').\n"
+            "Under each macro, list 3–7 Micro Topics (e.g., for 'Cell Structure': 'Membranes', 'Organelles', 'Cytoskeleton').\n\n"
             "EXCLUDE any items that are student project options, assignments, proposals, or deliverables.\n\n"
             "Return ONLY valid JSON with this schema:\n"
             "{\n"
             '  "document_title": "{{document_title}}",\n'
             '  "macros": [\n'
-            '    {"name": "MRP", "micros": [{"name": "MRP Process"}, {"name": "BOM Structure"}, {"name": "Inventory Optimization"}, {"name": "Customer Satisfaction"}]},\n'
-            '    {"name": "Aggregate Planning", "micros": [{"name": "Chase Strategy"}, {"name": "Level Strategy"}]}\n'
+            '    {"name": "Macro A", "micros": [{"name": "Micro A1"}, {"name": "Micro A2"}]},\n'
+            '    {"name": "Macro B", "micros": [{"name": "Micro B1"}]}\n'
             '  ]\n'
             "}\n\n"
             "NO markdown fences. Pure JSON only."
@@ -131,9 +131,9 @@ def _build_tasks(
             "{\n"
             '  "document_title": "...",\n'
             '  "macros": [\n'
-            '    {"name": "MRP", "micros": [\n'
-            '      {"name": "MRP Process", "concepts": [\n'
-            '        {"name": "Master Production Schedule", "definition": "...", "key_points": ["..."], "difficulty": "easy|medium|hard"}\n'
+            '    {"name": "Macro A", "micros": [\n'
+            '      {"name": "Micro A1", "concepts": [\n'
+            '        {"name": "Concept 1", "definition": "...", "key_points": ["..."], "difficulty": "easy|medium|hard"}\n'
             '      ]}\n'
             '    ]}\n'
             '  ]\n'
@@ -172,13 +172,13 @@ def _build_tasks(
             "❌ Q: 'Summarize this section in one sentence'\n"
             "❌ A: 'requirements planning system: • Creates schedules identifying...'\n"
             "❌ Q: 'What are the key concepts in this section?'\n\n"
-            "GOOD Examples:\n"
-            "✓ Q: 'What is Material Requirements Planning (MRP)?'\n"
-            "✓ A: 'A system that calculates materials and components needed to manufacture products based on the master production schedule.'\n\n"
-            "✓ Q: 'MRP determines order release dates based on _____.'\n"
-            "✓ A: 'lead times'\n\n"
-            "✓ Q: 'Why would a company use a Chase Strategy instead of Level Strategy?'\n"
-            "✓ A: 'To minimize inventory holding costs and respond quickly to demand changes, despite higher hiring/firing costs.'\n\n"
+            "GOOD Examples (generic):\n"
+            "✓ Q: 'What is osmosis?'\n"
+            "✓ A: 'The movement of water across a semipermeable membrane from low solute concentration to high.'\n\n"
+            "✓ Q: 'Newton's second law states that _____ equals mass times acceleration.'\n"
+            "✓ A: 'force'\n\n"
+            "✓ Q: 'Why is normalization important in database design?'\n"
+            "✓ A: 'It reduces redundancy and improves data integrity by organizing tables and relationships.'\n\n"
             "Return JSON with flashcards added to each concept, preserving macro/micro nesting:\n"
             "{\n"
             '  "document_title": "...",\n'

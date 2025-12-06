@@ -284,26 +284,191 @@ async function loadAllCards() {
             return;
         }
         
-        // Populate filters and compute filtered view
+        // Populate filters and render using unified renderer
         populateBrowseFilters(data);
         const filtered = applyBrowseFilters(data);
-        let html = "";
+        renderFilteredBrowse(filtered);
         
-        for (const doc of filtered.documents) {
-            html += `
-                <div class="document-section">
-                    <div class="document-header">${escapeHtml(doc.title || doc.name)}</div>
-                    <div class="document-info">${doc.document_id ? `Document ID: ${doc.document_id} | ` : ''}Total Cards: ${doc.total_cards ?? doc.topics.reduce((acc,t)=>acc+(t.cards?.length||0),0)}</div>
-            `;
-            
-            // Add topics and cards
+    } catch (error) {
+        console.error("Error loading cards:", error);
+        browseContent.innerHTML = `<p class='error'>Error loading cards: ${error.message}</p>`;
+    }
+}
+
+function populateBrowseFilters(data) {
+    const docSel = document.getElementById('filterDocument');
+    const macroSel = document.getElementById('filterMacro');
+    const microSel = document.getElementById('filterMicro');
+    const typeSel = document.getElementById('filterType');
+    const diffSel = document.getElementById('filterDifficulty');
+
+    if (!docSel || !macroSel || !microSel || !typeSel || !diffSel) return;
+
+    const docOptions = ['<option value="">All Documents</option>'];
+    data.documents.forEach(d => {
+        const name = d.title || d.name;
+        docOptions.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
+    });
+    docSel.innerHTML = docOptions.join('');
+
+    // Populate macros and micros (cascading)
+    const macrosSet = new Set();
+    const macroToMicros = new Map();
+    data.documents.forEach(d => {
+        if (d.macros) {
+            d.macros.forEach(m => {
+                macrosSet.add(m.macro_topic_name);
+                const list = macroToMicros.get(m.macro_topic_name) || new Set();
+                m.micro_topics.forEach(mi => list.add(mi.micro_topic_name));
+                macroToMicros.set(m.macro_topic_name, list);
+            });
+        } else if (d.topics) {
+            // Legacy: derive macros from left part of "Macro - Micro"
+            d.topics.forEach(t => {
+                const parts = (t.name || '').split(' - ');
+                const macro = parts[0] || 'Uncategorized';
+                const micro = parts[1] || 'General';
+                macrosSet.add(macro);
+                const list = macroToMicros.get(macro) || new Set();
+                list.add(micro);
+                macroToMicros.set(macro, list);
+            });
+        }
+    });
+    const macroOptions = ['<option value="">All Macros</option>', ...Array.from(macrosSet).map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`)];
+    macroSel.innerHTML = macroOptions.join('');
+    // Initialize micros for current macro selection
+    const currentMacro = macroSel.value;
+    const microOptions = ['<option value="">All Micros</option>'];
+    if (currentMacro && macroToMicros.has(currentMacro)) {
+        microOptions.push(...Array.from(macroToMicros.get(currentMacro)).map(mi => `<option value="${escapeHtml(mi)}">${escapeHtml(mi)}</option>`));
+    } else {
+        // Aggregate all micros
+        const allMicros = new Set();
+        for (const list of macroToMicros.values()) {
+            list.forEach(v => allMicros.add(v));
+        }
+        microOptions.push(...Array.from(allMicros).map(mi => `<option value="${escapeHtml(mi)}">${escapeHtml(mi)}</option>`));
+    }
+    microSel.innerHTML = microOptions.join('');
+
+    ['filterDocument','filterMacro','filterMicro','filterType','filterDifficulty'].forEach(id => {
+        const el = document.getElementById(id);
+        el.onchange = () => {
+            // Rebuild micros when macro changes
+            if (id === 'filterMacro') {
+                const selectedMacro = macroSel.value;
+                const microOptions = ['<option value="">All Micros</option>'];
+                if (selectedMacro && macroToMicros.has(selectedMacro)) {
+                    microOptions.push(...Array.from(macroToMicros.get(selectedMacro)).map(mi => `<option value="${escapeHtml(mi)}">${escapeHtml(mi)}</option>`));
+                } else {
+                    const allMicros = new Set();
+                    for (const list of macroToMicros.values()) list.forEach(v => allMicros.add(v));
+                    microOptions.push(...Array.from(allMicros).map(mi => `<option value="${escapeHtml(mi)}">${escapeHtml(mi)}</option>`));
+                }
+                microSel.innerHTML = microOptions.join('');
+            }
+            const filtered = applyBrowseFilters(window.__browseData);
+            renderFilteredBrowse(filtered);
+        };
+    });
+}
+
+function applyBrowseFilters(data) {
+    const docValue = document.getElementById('filterDocument')?.value || '';
+    const macroValue = document.getElementById('filterMacro')?.value || '';
+    const microValue = document.getElementById('filterMicro')?.value || '';
+    const typeValue = document.getElementById('filterType')?.value || '';
+    const diffValue = document.getElementById('filterDifficulty')?.value || '';
+
+    const filtered = { documents: [] };
+    data.documents.forEach(d => {
+        const name = d.title || d.name;
+        if (docValue && name !== docValue) return;
+        if (d.macros) {
+            const newDoc = { title: d.title, name: d.name, document_id: d.document_id, macros: [] };
+            d.macros.forEach(m => {
+                if (macroValue && m.macro_topic_name !== macroValue) return;
+                const newMicroList = [];
+                m.micro_topics.forEach(mi => {
+                    if (microValue && mi.micro_topic_name !== microValue) return;
+                    const cards = (mi.cards || []).filter(c => {
+                        if (typeValue && c.type !== typeValue) return false;
+                        if (diffValue && (c.difficulty || '').toLowerCase() !== diffValue) return false;
+                        return true;
+                    });
+                    newMicroList.push({ micro_topic_id: mi.micro_topic_id, micro_topic_name: mi.micro_topic_name, card_count: cards.length, cards });
+                });
+                if (newMicroList.length) newDoc.macros.push({ macro_topic_id: m.macro_topic_id, macro_topic_name: m.macro_topic_name, micro_topics: newMicroList });
+            });
+            if (newDoc.macros.length) filtered.documents.push(newDoc);
+        } else if (d.topics) {
+            // Legacy path: interpret left of name as macro, right as micro
+            const newDoc = { title: d.title, name: d.name, document_id: d.document_id, topics: [] };
+            d.topics.forEach(t => {
+                const parts = (t.name || '').split(' - ');
+                const macro = parts[0] || 'Uncategorized';
+                const micro = parts[1] || 'General';
+                if (macroValue && macro !== macroValue) return;
+                if (microValue && micro !== microValue) return;
+                const newTopic = { name: t.name, cards: [] };
+                (t.cards || []).forEach(c => {
+                    if (typeValue && c.type !== typeValue) return;
+                    if (diffValue && (c.difficulty || '').toLowerCase() !== diffValue) return;
+                    newTopic.cards.push(c);
+                });
+                if (newTopic.cards.length) newDoc.topics.push(newTopic);
+            });
+            if (newDoc.topics.length) filtered.documents.push(newDoc);
+        }
+    });
+    return filtered;
+}
+
+function renderFilteredBrowse(filtered) {
+    const browseContent = document.getElementById("browseContent");
+    let html = "";
+    for (const doc of filtered.documents) {
+        html += `
+            <div class="document-section">
+                <div class="document-header">${escapeHtml(doc.title || doc.name)}</div>
+        `;
+        if (doc.macros) {
+            doc.macros.forEach(m => {
+                html += `
+                    <div class="topic-section">
+                        <div class="topic-header">🏷️ ${escapeHtml(m.macro_topic_name)}</div>
+                `;
+                m.micro_topics.forEach(mi => {
+                    html += `
+                        <div class="topic-section">
+                            <div class="topic-header">📚 ${escapeHtml(mi.micro_topic_name)} <span class="muted">(${mi.card_count} cards)</span></div>
+                    `;
+                    (mi.cards || []).forEach(card => {
+                        const typeClass = `card-type-${card.type}`;
+                        html += `
+                            <div class="card-item">
+                                <div>
+                                    <span class="card-type-badge ${typeClass}">${card.type}</span>
+                                    <span class="card-difficulty">Difficulty: ${card.difficulty || 'N/A'}</span>
+                                </div>
+                                <div class="card-front">Q: ${escapeHtml(card.front)}</div>
+                                <div class="card-back">A: ${escapeHtml(card.back)}</div>
+                            </div>
+                        `;
+                    });
+                    html += `</div>`;
+                });
+                html += `</div>`;
+            });
+        } else if (doc.topics) {
+            const total = doc.topics.reduce((acc,t)=>acc+(t.cards?.length||0),0);
+            html += `<div class="document-info">Total Cards: ${total}</div>`;
             for (const topic of doc.topics) {
                 html += `
                     <div class="topic-section">
                         <div class="topic-header">📚 ${escapeHtml(topic.name)}</div>
                 `;
-                
-                // Add cards
                 for (const card of topic.cards) {
                     const typeClass = `card-type-${card.type}`;
                     html += `
@@ -317,104 +482,8 @@ async function loadAllCards() {
                         </div>
                     `;
                 }
-                
-                html += `</div>`; // Close topic-section
+                html += `</div>`;
             }
-            
-            html += `</div>`; // Close document-section
-        }
-        
-        browseContent.innerHTML = html;
-        
-    } catch (error) {
-        console.error("Error loading cards:", error);
-        browseContent.innerHTML = `<p class='error'>Error loading cards: ${error.message}</p>`;
-    }
-}
-
-function populateBrowseFilters(data) {
-    const docSel = document.getElementById('filterDocument');
-    const topicSel = document.getElementById('filterTopic');
-    const typeSel = document.getElementById('filterType');
-    const diffSel = document.getElementById('filterDifficulty');
-
-    if (!docSel || !topicSel || !typeSel || !diffSel) return;
-
-    const docOptions = ['<option value="">All Documents</option>'];
-    data.documents.forEach(d => {
-        const name = d.title || d.name;
-        docOptions.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
-    });
-    docSel.innerHTML = docOptions.join('');
-
-    const topicsSet = new Set();
-    data.documents.forEach(d => d.topics.forEach(t => topicsSet.add(t.name)));
-    const topicOptions = ['<option value="">All Topics</option>', ...Array.from(topicsSet).map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`)];
-    topicSel.innerHTML = topicOptions.join('');
-
-    ['filterDocument','filterTopic','filterType','filterDifficulty'].forEach(id => {
-        const el = document.getElementById(id);
-        el.onchange = () => {
-            const filtered = applyBrowseFilters(window.__browseData);
-            renderFilteredBrowse(filtered);
-        };
-    });
-}
-
-function applyBrowseFilters(data) {
-    const docValue = document.getElementById('filterDocument')?.value || '';
-    const topicValue = document.getElementById('filterTopic')?.value || '';
-    const typeValue = document.getElementById('filterType')?.value || '';
-    const diffValue = document.getElementById('filterDifficulty')?.value || '';
-
-    const filtered = { documents: [] };
-    data.documents.forEach(d => {
-        const name = d.title || d.name;
-        if (docValue && name !== docValue) return;
-        const newDoc = { title: d.title, name: d.name, document_id: d.document_id, topics: [] };
-        d.topics.forEach(t => {
-            if (topicValue && t.name !== topicValue) return;
-            const newTopic = { name: t.name, cards: [] };
-            t.cards.forEach(c => {
-                if (typeValue && c.type !== typeValue) return;
-                if (diffValue && (c.difficulty || '').toLowerCase() !== diffValue) return;
-                newTopic.cards.push(c);
-            });
-            if (newTopic.cards.length) newDoc.topics.push(newTopic);
-        });
-        if (newDoc.topics.length) filtered.documents.push(newDoc);
-    });
-    return filtered;
-}
-
-function renderFilteredBrowse(filtered) {
-    const browseContent = document.getElementById("browseContent");
-    let html = "";
-    for (const doc of filtered.documents) {
-        html += `
-            <div class="document-section">
-                <div class="document-header">${escapeHtml(doc.title || doc.name)}</div>
-                <div class="document-info">${doc.document_id ? `Document ID: ${doc.document_id} | ` : ''}Total Cards: ${doc.topics.reduce((acc,t)=>acc+(t.cards?.length||0),0)}</div>
-        `;
-        for (const topic of doc.topics) {
-            html += `
-                <div class="topic-section">
-                    <div class="topic-header">📚 ${escapeHtml(topic.name)}</div>
-            `;
-            for (const card of topic.cards) {
-                const typeClass = `card-type-${card.type}`;
-                html += `
-                    <div class="card-item">
-                        <div>
-                            <span class="card-type-badge ${typeClass}">${card.type}</span>
-                            <span class="card-difficulty">Difficulty: ${card.difficulty || 'N/A'}</span>
-                        </div>
-                        <div class="card-front">Q: ${escapeHtml(card.front)}</div>
-                        <div class="card-back">A: ${escapeHtml(card.back)}</div>
-                    </div>
-                `;
-            }
-            html += `</div>`;
         }
         html += `</div>`;
     }
@@ -422,7 +491,7 @@ function renderFilteredBrowse(filtered) {
 }
 
 function clearBrowseFilters() {
-    ['filterDocument','filterTopic','filterType','filterDifficulty'].forEach(id => {
+    ['filterDocument','filterMacro','filterMicro','filterType','filterDifficulty'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
