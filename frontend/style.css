@@ -282,6 +282,14 @@ h2 {
     font-size: 0.95em;
 }
 
+.mcq-options {
+    margin: 6px 0 6px 18px;
+    color: #374151;
+}
+.mcq-options li {
+    margin: 2px 0;
+}
+
 #pdfFile {
     flex: 1;
     padding: 8px;

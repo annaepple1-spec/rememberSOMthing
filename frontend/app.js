@@ -305,8 +305,14 @@ function populateBrowseFilters(data) {
     if (!docSel || !macroSel || !microSel || !typeSel || !diffSel) return;
 
     const docOptions = ['<option value="">All Documents</option>'];
+    const isDemo = (title) => {
+        const t = (title || '').toLowerCase();
+        return t.includes('demo') || t.includes('sample') || t.includes('example');
+    };
+
     data.documents.forEach(d => {
         const name = d.title || d.name;
+        if (isDemo(name)) return; // skip demo/sample docs in filters
         docOptions.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
     });
     docSel.innerHTML = docOptions.join('');
@@ -315,6 +321,8 @@ function populateBrowseFilters(data) {
     const macrosSet = new Set();
     const macroToMicros = new Map();
     data.documents.forEach(d => {
+        const name = d.title || d.name;
+        if (isDemo(name)) return;
         if (d.macros) {
             d.macros.forEach(m => {
                 macrosSet.add(m.macro_topic_name);
@@ -382,8 +390,14 @@ function applyBrowseFilters(data) {
     const diffValue = document.getElementById('filterDifficulty')?.value || '';
 
     const filtered = { documents: [] };
+    const isDemo = (title) => {
+        const t = (title || '').toLowerCase();
+        return t.includes('demo') || t.includes('sample') || t.includes('example');
+    };
+
     data.documents.forEach(d => {
         const name = d.title || d.name;
+        if (isDemo(name)) return; // skip demo/sample docs
         if (docValue && name !== docValue) return;
         if (d.macros) {
             const newDoc = { title: d.title, name: d.name, document_id: d.document_id, macros: [] };
@@ -448,14 +462,30 @@ function renderFilteredBrowse(filtered) {
                             <div class="cards-grid">
                     `;
                     (mi.cards || []).forEach(card => {
-                        const typeClass = `card-type-${(card.type || '').toLowerCase()}`;
+                        const type = (card.type || '').toLowerCase();
+                        const typeClass = `card-type-${type}`;
+                        let front = card.front || '';
+                        let optionsHtml = '';
+                        if (type === 'mcq') {
+                            const parts = front.split('\n');
+                            const optStart = parts.findIndex(l => l.trim().toLowerCase().startsWith('options:'));
+                            if (optStart !== -1) {
+                                const question = parts.slice(0, optStart).join('\n');
+                                const optionLines = parts.slice(optStart + 1).filter(Boolean);
+                                front = question;
+                                if (optionLines.length) {
+                                    optionsHtml = '<ul class="mcq-options">' + optionLines.map(line => `<li>${escapeHtml(line)}</li>`).join('') + '</ul>';
+                                }
+                            }
+                        }
                         html += `
                             <div class="card-item">
                                 <div class="card-header">
-                                    <span class="card-type-badge ${typeClass}">${(card.type || '').toLowerCase()}</span>
+                                    <span class="card-type-badge ${typeClass}">${type}</span>
                                     <span class="card-difficulty">Difficulty: ${(card.difficulty || 'N/A')}</span>
                                 </div>
-                                <div class="card-front">Q: ${escapeHtml(card.front || '')}</div>
+                                <div class="card-front">Q: ${escapeHtml(front)}</div>
+                                ${optionsHtml}
                                 <div class="card-back">A: ${escapeHtml(card.back || '')}</div>
                             </div>
                         `;
@@ -476,14 +506,30 @@ function renderFilteredBrowse(filtered) {
                         <div class="cards-grid">
                 `;
                 for (const card of topic.cards) {
-                    const typeClass = `card-type-${(card.type || '').toLowerCase()}`;
+                    const type = (card.type || '').toLowerCase();
+                    const typeClass = `card-type-${type}`;
+                    let front = card.front || '';
+                    let optionsHtml = '';
+                    if (type === 'mcq') {
+                        const parts = front.split('\n');
+                        const optStart = parts.findIndex(l => l.trim().toLowerCase().startsWith('options:'));
+                        if (optStart !== -1) {
+                            const question = parts.slice(0, optStart).join('\n');
+                            const optionLines = parts.slice(optStart + 1).filter(Boolean);
+                            front = question;
+                            if (optionLines.length) {
+                                optionsHtml = '<ul class="mcq-options">' + optionLines.map(line => `<li>${escapeHtml(line)}</li>`).join('') + '</ul>';
+                            }
+                        }
+                    }
                     html += `
                         <div class="card-item">
                             <div class="card-header">
-                                <span class="card-type-badge ${typeClass}">${(card.type || '').toLowerCase()}</span>
+                                <span class="card-type-badge ${typeClass}">${type}</span>
                                 <span class="card-difficulty">Difficulty: ${(card.difficulty || 'N/A')}</span>
                             </div>
-                            <div class="card-front">Q: ${escapeHtml(card.front || '')}</div>
+                            <div class="card-front">Q: ${escapeHtml(front)}</div>
+                            ${optionsHtml}
                             <div class="card-back">A: ${escapeHtml(card.back || '')}</div>
                         </div>
                     `;
