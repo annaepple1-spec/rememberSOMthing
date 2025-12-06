@@ -6,18 +6,18 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    background-color: #f5f5f5;
+    background-color: #f0f2f5;
     padding: 20px;
     line-height: 1.6;
 }
 
 .container {
-    max-width: 800px;
+    max-width: 980px;
     margin: 0 auto;
     background-color: white;
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 32px;
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
 }
 
 h1 {
@@ -43,8 +43,8 @@ h2 {
 
 .tab-button {
     flex: 1;
-    padding: 15px 20px;
-    background-color: #f5f5f5;
+    padding: 14px 18px;
+    background-color: #eef1f4;
     border: none;
     border-bottom: 3px solid transparent;
     cursor: pointer;
@@ -61,8 +61,8 @@ h2 {
 
 .tab-button.active {
     background-color: white;
-    color: #4CAF50;
-    border-bottom-color: #4CAF50;
+    color: #2e7d32;
+    border-bottom-color: #2e7d32;
 }
 
 /* Tab Content */
@@ -72,7 +72,7 @@ h2 {
 
 .tab-panel {
     display: none;
-    padding: 20px 0;
+    padding: 16px 0;
 }
 
 .tab-panel.active {
@@ -199,24 +199,27 @@ h2 {
 
 .card-item {
     margin-bottom: 12px;
-    padding: 12px;
-    background-color: white;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    transition: box-shadow 0.2s;
+    padding: 14px 16px;
+    background: linear-gradient(180deg, #ffffff 0%, #fcfcfc 100%);
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(17, 24, 39, 0.06);
+    transition: box-shadow 0.2s, transform 0.1s;
 }
 
 .card-item:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(17, 24, 39, 0.12);
 }
 
 .card-type-badge {
     display: inline-block;
-    padding: 3px 8px;
-    border-radius: 3px;
-    font-size: 0.75em;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.72em;
     font-weight: 600;
     text-transform: uppercase;
+    letter-spacing: 0.02em;
     margin-right: 8px;
 }
 
@@ -242,24 +245,26 @@ h2 {
 
 .card-difficulty {
     display: inline-block;
-    padding: 3px 8px;
-    border-radius: 3px;
+    padding: 4px 8px;
+    border-radius: 6px;
     font-size: 0.75em;
-    background-color: #f5f5f5;
-    color: #666;
+    background-color: #eef1f4;
+    color: #4b5563;
 }
 
 .card-front {
     font-weight: 600;
-    color: #333;
-    margin: 8px 0;
+    color: #111827;
+    margin: 8px 0 4px 0;
+    font-size: 0.98em;
 }
 
 .card-back {
-    color: #666;
-    margin-top: 4px;
-    padding-top: 8px;
-    border-top: 1px dashed #ddd;
+    color: #4b5563;
+    margin-top: 6px;
+    padding-top: 10px;
+    border-top: 1px dashed #e5e7eb;
+    font-size: 0.95em;
 }
 
 #pdfFile {
@@ -272,35 +277,35 @@ h2 {
 /* Buttons */
 button {
     padding: 10px 20px;
-    background-color: #007bff;
+    background-color: #1976d2;
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
     font-size: 14px;
     transition: background-color 0.2s;
 }
 
 button:hover {
-    background-color: #0056b3;
+    background-color: #1565c0;
 }
 
 button:active {
-    background-color: #004085;
+    background-color: #0d47a1;
 }
 
 .primary-button {
-    background-color: #28a745;
+    background-color: #2e7d32;
     font-size: 16px;
     padding: 12px 24px;
 }
 
 .primary-button:hover {
-    background-color: #218838;
+    background-color: #1b5e20;
 }
 
 .primary-button:active {
-    background-color: #1e7e34;
+    background-color: #10451d;
 }
 
 /* Study Section */
@@ -311,15 +316,15 @@ button:active {
 }
 
 .secondary-button {
-    background-color: #6c757d;
+    background-color: #607d8b;
 }
 
 .secondary-button:hover {
-    background-color: #5a6268;
+    background-color: #546e7a;
 }
 
 .secondary-button:active {
-    background-color: #545b62;
+    background-color: #455a64;
 }
 
 .study-mode-indicator {
