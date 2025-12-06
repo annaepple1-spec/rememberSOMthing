@@ -1,7 +1,13 @@
+import os
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from backend.database import init_db
 from backend.routers import session, upload, progress
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Create FastAPI app
 app = FastAPI(title="AI Flashcard Trainer")
@@ -19,6 +25,9 @@ app.add_middleware(
 app.include_router(session.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
 app.include_router(progress.router, prefix="/api")
+
+# Mount static files for frontend
+app.mount("/frontend", StaticFiles(directory="frontend", html=True), name="frontend")
 
 
 @app.on_event("startup")

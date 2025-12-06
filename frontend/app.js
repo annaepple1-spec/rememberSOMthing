@@ -4,6 +4,51 @@ let currentCardId = null;
 const API_BASE_URL = "http://localhost:8000";
 
 /**
+ * Switch between tabs
+ */
+function switchTab(tabName) {
+    console.log('Switching to tab:', tabName);
+    
+    // Get all tab panels and buttons
+    const allPanels = document.querySelectorAll('.tab-panel');
+    const allButtons = document.querySelectorAll('.tab-button');
+    
+    // Hide all panels
+    allPanels.forEach(panel => {
+        panel.classList.remove('active');
+        panel.style.display = 'none';
+    });
+    
+    // Deactivate all buttons
+    allButtons.forEach(button => {
+        button.classList.remove('active');
+    });
+    
+    // Show the selected panel
+    const targetPanel = document.getElementById(tabName + '-tab');
+    if (targetPanel) {
+        targetPanel.classList.add('active');
+        targetPanel.style.display = 'block';
+        console.log('Activated panel:', tabName + '-tab');
+    } else {
+        console.error('Panel not found:', tabName + '-tab');
+    }
+    
+    // Activate the corresponding button
+    allButtons.forEach(button => {
+        const onclick = button.getAttribute('onclick');
+        if (onclick && onclick.includes("'" + tabName + "'")) {
+            button.classList.add('active');
+        }
+    });
+    
+    // Auto-load content for browse tab
+    if (tabName === 'browse') {
+        loadAllCards();
+    }
+}
+
+/**
  * Upload a PDF file to the backend
  */
 async function uploadPdf() {
@@ -212,6 +257,84 @@ function studyAllDocuments() {
     document.getElementById("answerInput").value = "";
     document.getElementById("feedback").textContent = "";
     document.getElementById("feedback").className = "feedback";
+}
+
+/**
+ * Load and display all cards organized by document and topic
+ */
+async function loadAllCards() {
+    const browseContent = document.getElementById("browseContent");
+    
+    // Show loading state
+    browseContent.innerHTML = "<p class='info'>Loading all cards...</p>";
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/progress/browse`);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to load cards: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.documents || data.documents.length === 0) {
+            browseContent.innerHTML = "<p class='info'>No cards found. Upload a PDF to get started!</p>";
+            return;
+        }
+        
+        // Build HTML for all documents
+        let html = "";
+        
+        for (const doc of data.documents) {
+            html += `
+                <div class="document-section">
+                    <div class="document-header">${escapeHtml(doc.title)}</div>
+                    <div class="document-info">Document ID: ${doc.document_id} | Total Cards: ${doc.total_cards}</div>
+            `;
+            
+            // Add topics and cards
+            for (const topic of doc.topics) {
+                html += `
+                    <div class="topic-section">
+                        <div class="topic-header">📚 ${escapeHtml(topic.name)}</div>
+                `;
+                
+                // Add cards
+                for (const card of topic.cards) {
+                    const typeClass = `card-type-${card.type}`;
+                    html += `
+                        <div class="card-item">
+                            <div>
+                                <span class="card-type-badge ${typeClass}">${card.type}</span>
+                                <span class="card-difficulty">Difficulty: ${card.difficulty || 'N/A'}</span>
+                            </div>
+                            <div class="card-front">Q: ${escapeHtml(card.front)}</div>
+                            <div class="card-back">A: ${escapeHtml(card.back)}</div>
+                        </div>
+                    `;
+                }
+                
+                html += `</div>`; // Close topic-section
+            }
+            
+            html += `</div>`; // Close document-section
+        }
+        
+        browseContent.innerHTML = html;
+        
+    } catch (error) {
+        console.error("Error loading cards:", error);
+        browseContent.innerHTML = `<p class='error'>Error loading cards: ${error.message}</p>`;
+    }
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 /**

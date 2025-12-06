@@ -4,52 +4,75 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>rememberSOMthing - AI Flashcard Trainer</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
     <div class="container">
         <h1>rememberSOMthing – AI Flashcard Trainer</h1>
         
-        <!-- Section 1: Upload PDF -->
-        <section class="card">
-            <h2>1. Upload PDF</h2>
-            <div class="upload-controls">
-                <input type="file" id="pdfFile" accept=".pdf">
-                <button onclick="uploadPdf()">Upload</button>
-            </div>
-            <p id="uploadStatus" class="status-message"></p>
-        </section>
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+            <button class="tab-button active" onclick="switchTab('upload')">📤 Upload</button>
+            <button class="tab-button" onclick="switchTab('study')">📖 Study</button>
+            <button class="tab-button" onclick="switchTab('browse')">📚 Browse Cards</button>
+            <button class="tab-button" onclick="switchTab('progress')">📊 Progress</button>
+        </div>
 
-        <!-- Section 2: Study -->
-        <section class="card">
-            <h2>2. Study</h2>
-            <div class="study-controls">
-                <button onclick="loadNextCard()" class="primary-button">Next Card</button>
-                <button onclick="studyAllDocuments()" class="secondary-button">Study All Documents</button>
+        <!-- Tab Content -->
+        <div class="tab-content">
+            
+            <!-- Upload Tab -->
+            <div id="upload-tab" class="tab-panel active">
+                <h2>Upload PDF Document</h2>
+                <p class="tab-description">Upload a PDF file to automatically generate flashcards using AI.</p>
+                <div class="upload-controls">
+                    <input type="file" id="pdfFile" accept=".pdf">
+                    <button onclick="uploadPdf()" class="primary-button">Upload & Generate Cards</button>
+                </div>
+                <p id="uploadStatus" class="status-message"></p>
             </div>
-            <p id="studyMode" class="study-mode-indicator"></p>
-            <div class="card-content">
-                <p id="cardFront" class="card-front">Click "Next Card" to start studying.</p>
-            </div>
-            <div class="answer-section">
-                <label for="answerInput">Your Answer:</label>
-                <textarea id="answerInput" rows="4" placeholder="Type your answer here..."></textarea>
-                <button onclick="submitAnswer()" class="primary-button">Submit Answer</button>
-            </div>
-            <div id="feedback" class="feedback"></div>
-        </section>
 
-        <!-- Section 3: Progress -->
-        <section class="card">
-            <h2>3. Progress</h2>
-            <div class="progress-controls">
-                <input type="text" id="docId" placeholder="Document ID">
-                <button onclick="checkProgress()">Check Progress</button>
+            <!-- Study Tab -->
+            <div id="study-tab" class="tab-panel">
+                <h2>Study Session</h2>
+                <p class="tab-description">Practice with your flashcards using spaced repetition.</p>
+                <div class="study-controls">
+                    <button onclick="loadNextCard()" class="primary-button">Next Card</button>
+                    <button onclick="studyAllDocuments()" class="secondary-button">Study All Documents</button>
+                </div>
+                <p id="studyMode" class="study-mode-indicator"></p>
+                <div class="card-content">
+                    <p id="cardFront" class="card-front">Click "Next Card" to start studying.</p>
+                </div>
+                <div class="answer-section">
+                    <label for="answerInput">Your Answer:</label>
+                    <textarea id="answerInput" rows="4" placeholder="Type your answer here..."></textarea>
+                    <button onclick="submitAnswer()" class="primary-button">Submit Answer</button>
+                </div>
+                <div id="feedback" class="feedback"></div>
             </div>
-            <p id="progressResult" class="status-message"></p>
-        </section>
+
+            <!-- Browse Cards Tab -->
+            <div id="browse-tab" class="tab-panel">
+                <h2>Browse All Cards</h2>
+                <p class="tab-description">View all generated flashcards organized by document and topic.</p>
+                <div id="browseContent" class="browse-content"></div>
+            </div>
+
+            <!-- Progress Tab -->
+            <div id="progress-tab" class="tab-panel">
+                <h2>Progress & Mastery</h2>
+                <p class="tab-description">Track your learning progress across all documents.</p>
+                <div class="progress-controls">
+                    <input type="text" id="docId" placeholder="Document ID (optional)">
+                    <button onclick="checkProgress()" class="primary-button">Check Progress</button>
+                </div>
+                <p id="progressResult" class="status-message"></p>
+            </div>
+
+        </div>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=2"></script>
 </body>
 </html>

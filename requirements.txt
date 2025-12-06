@@ -4,3 +4,8 @@ sqlalchemy
 pydantic
 python-multipart
 pymupdf
+crewai
+crewai-tools
+langchain
+langchain-openai
+python-dotenv
