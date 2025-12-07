@@ -28,8 +28,8 @@ app.include_router(session.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
 app.include_router(progress.router, prefix="/api")
 
-# Mount static files for frontend
-app.mount("/frontend", StaticFiles(directory="frontend", html=True), name="frontend")
+# Mount static files for frontend at root
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
 
 @app.on_event("startup")
