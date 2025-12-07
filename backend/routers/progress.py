@@ -1,4 +1,5 @@
 """Router for tracking user progress on documents."""
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from backend.database import get_db
@@ -40,7 +41,7 @@ def get_document_progress(doc_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/browse")
-def browse_all_cards(db: Session = Depends(get_db), document_id: str | None = None, macro_topic_id: int | None = None, micro_topic_id: int | None = None, type: str | None = None, difficulty: str | None = None):
+def browse_all_cards(db: Session = Depends(get_db), document_id: Optional[str] = None, macro_topic_id: Optional[int] = None, micro_topic_id: Optional[int] = None, type: Optional[str] = None, difficulty: Optional[str] = None):
     """
     Browse all documents and their cards organized by topics.
     
