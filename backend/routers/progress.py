@@ -168,3 +168,136 @@ def get_macro_progress(doc_id: str, db: Session = Depends(get_db)):
 def get_micro_progress(macro_id: int, db: Session = Depends(get_db)):
     data = micro_progress(db, macro_id, user_id="demo-user")
     return {"macro_topic_id": macro_id, "micros": data}
+
+
+@router.get("/topics/{doc_id}")
+def get_topic_mastery_progress(doc_id: str, db: Session = Depends(get_db)):
+    """
+    Get adaptive learning progress for all topics in a document.
+    
+    Returns UserTopicState for each micro topic with:
+    - knowledge_score (0-100%)
+    - cards_seen, cards_mastered
+    - is_struggling flag
+    - struggle_weight
+    
+    Args:
+        doc_id: Document ID to get topic progress for
+        
+    Returns:
+        JSON with document info and list of topic states
+    """
+    from backend.models import UserTopicState
+    from backend.services.review import DEMO_USER_ID
+    
+    # Verify document exists
+    document = db.query(Document).filter(Document.id == doc_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Get all micro topics with their states
+    topic_states_query = db.query(
+        MicroTopic,
+        UserTopicState
+    ).outerjoin(
+        UserTopicState,
+        (MicroTopic.id == UserTopicState.micro_topic_id) & 
+        (UserTopicState.user_id == DEMO_USER_ID)
+    ).filter(
+        MicroTopic.document_id == doc_id
+    ).all()
+    
+    topics_data = []
+    for micro_topic, topic_state in topic_states_query:
+        # Get macro topic name
+        macro = db.query(MacroTopic).filter(MacroTopic.id == micro_topic.macro_topic_id).first()
+        macro_name = macro.name if macro else "Unknown"
+        
+        if topic_state:
+            # Topic has been practiced
+            is_struggling = topic_state.knowledge_score < 50.0 or topic_state.struggle_weight > 1.5
+            topics_data.append({
+                "micro_topic_id": micro_topic.id,
+                "micro_topic_name": micro_topic.name,
+                "macro_topic_name": macro_name,
+                "knowledge_score": round(topic_state.knowledge_score, 1),
+                "cards_seen": topic_state.cards_seen,
+                "cards_mastered": topic_state.cards_mastered,
+                "struggle_weight": round(topic_state.struggle_weight, 2),
+                "is_struggling": is_struggling,
+                "avg_card_score": round(topic_state.avg_card_score, 2),
+                "total_reviews": topic_state.total_reviews,
+                "last_practice_at": topic_state.last_practice_at.isoformat() if topic_state.last_practice_at else None
+            })
+        else:
+            # Topic not yet practiced
+            # Count total cards in this topic
+            total_cards = db.query(Card).filter(Card.micro_topic_id == micro_topic.id).count()
+            topics_data.append({
+                "micro_topic_id": micro_topic.id,
+                "micro_topic_name": micro_topic.name,
+                "macro_topic_name": macro_name,
+                "knowledge_score": 0.0,
+                "cards_seen": 0,
+                "cards_mastered": 0,
+                "struggle_weight": 1.0,
+                "is_struggling": False,
+                "avg_card_score": 0.0,
+                "total_reviews": 0,
+                "total_cards": total_cards,
+                "last_practice_at": None
+            })
+    
+    return {
+        "document_id": doc_id,
+        "title": document.title,
+        "topics": topics_data
+    }
+
+
+@router.get("/dashboard")
+def get_dashboard_progress(db: Session = Depends(get_db)):
+    """
+    Get overall adaptive learning dashboard statistics.
+    
+    Returns aggregate stats across all documents:
+    - Average knowledge score
+    - Total topics
+    - Struggling topics count
+    - Total reviews
+    
+    Returns:
+        JSON with dashboard statistics
+    """
+    from backend.models import UserTopicState
+    from backend.services.review import DEMO_USER_ID
+    from sqlalchemy import func
+    
+    # Get all topic states for user
+    topic_states = db.query(UserTopicState).filter(
+        UserTopicState.user_id == DEMO_USER_ID
+    ).all()
+    
+    if not topic_states:
+        return {
+            "avg_knowledge_score": 0.0,
+            "total_topics": 0,
+            "struggling_topics": 0,
+            "total_reviews": 0,
+            "topics_mastered": 0
+        }
+    
+    # Calculate aggregate statistics
+    total_topics = len(topic_states)
+    avg_knowledge = sum(ts.knowledge_score for ts in topic_states) / total_topics
+    struggling_count = sum(1 for ts in topic_states if ts.knowledge_score < 50.0 or ts.struggle_weight > 1.5)
+    total_reviews = sum(ts.total_reviews for ts in topic_states)
+    topics_mastered = sum(1 for ts in topic_states if ts.knowledge_score >= 80.0)
+    
+    return {
+        "avg_knowledge_score": round(avg_knowledge, 1),
+        "total_topics": total_topics,
+        "struggling_topics": struggling_count,
+        "total_reviews": total_reviews,
+        "topics_mastered": topics_mastered
+    }

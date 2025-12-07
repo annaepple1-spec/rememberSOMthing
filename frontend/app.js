@@ -1,7 +1,8 @@
 // Global variables
 let currentDocumentId = null;
 let currentCardId = null;
-const API_BASE_URL = "http://localhost:8000";
+let currentCardData = null;  // Store full card data including type
+const API_BASE_URL = "http://127.0.0.1:8000";
 
 /**
  * Switch between tabs
@@ -124,27 +125,35 @@ async function uploadPdf() {
 }
 
 /**
- * Load the next card for studying
+ * Load the next card for studying with adaptive selection
  */
 async function loadNextCard() {
     const cardFrontElement = document.getElementById("cardFront");
-    const answerInput = document.getElementById("answerInput");
+    const studyAnswerEl = document.getElementById("studyAnswer");
+    const typeBadgeEl = document.getElementById("studyTypeBadge");
+    const difficultyEl = document.getElementById("studyDifficulty");
     const feedbackElement = document.getElementById("feedback");
     
+    // Clear all answer sections
+    clearAnswerSections();
+    
     // Clear previous state
-    answerInput.value = "";
     feedbackElement.textContent = "";
     feedbackElement.className = "feedback";
     currentCardId = null;
+    currentCardData = null;
+    if (studyAnswerEl) { studyAnswerEl.style.display = 'none'; studyAnswerEl.textContent = ''; }
+    if (typeBadgeEl) { typeBadgeEl.style.display = 'none'; typeBadgeEl.textContent = ''; typeBadgeEl.className = 'card-type-badge'; }
+    if (difficultyEl) { difficultyEl.style.display = 'none'; difficultyEl.textContent = ''; difficultyEl.className = 'card-difficulty'; }
     
     // Show loading state
     cardFrontElement.textContent = "Loading next card...";
     
     try {
-        // Build URL with optional document_id filter
+        // Use adaptive card selection if document is selected
         let url = `${API_BASE_URL}/api/session/next-card`;
         if (currentDocumentId) {
-            url += `?document_id=${encodeURIComponent(currentDocumentId)}`;
+            url = `${API_BASE_URL}/api/session/next-card-adaptive?document_id=${encodeURIComponent(currentDocumentId)}`;
         }
         
         const response = await fetch(url);
@@ -162,9 +171,20 @@ async function loadNextCard() {
             return;
         }
         
-        // Store card ID and display question
+        // Store card data
         currentCardId = card.id;
-        cardFrontElement.textContent = card.front;
+        currentCardData = card;
+        const type = (card.type || '').toLowerCase();
+        
+        // Show type badge
+        if (typeBadgeEl && type) {
+            typeBadgeEl.textContent = type;
+            typeBadgeEl.className = `card-type-badge card-type-${type}`;
+            typeBadgeEl.style.display = 'inline-block';
+        }
+        
+        // Render card based on type
+        renderCardByType(card, type, cardFrontElement);
         
     } catch (error) {
         console.error("Error loading card:", error);
@@ -173,28 +193,159 @@ async function loadNextCard() {
 }
 
 /**
- * Submit the user's answer for grading
+ * Clear all answer input sections
+ */
+function clearAnswerSections() {
+    const mcqOptions = document.getElementById("mcqOptions");
+    const textAnswerSection = document.getElementById("textAnswerSection");
+    const selfGradeSection = document.getElementById("selfGradeSection");
+    const answerInput = document.getElementById("answerInput");
+    const revealButton = document.getElementById("revealButton");
+    
+    if (mcqOptions) {
+        mcqOptions.style.display = 'none';
+        mcqOptions.innerHTML = '';
+    }
+    if (textAnswerSection) {
+        textAnswerSection.style.display = 'none';
+    }
+    if (answerInput) {
+        answerInput.value = '';
+    }
+    if (selfGradeSection) {
+        selfGradeSection.style.display = 'none';
+    }
+    if (revealButton) {
+        revealButton.style.display = 'inline-block';
+    }
+}
+
+/**
+ * Render card based on its type
+ */
+function renderCardByType(card, type, cardFrontElement) {
+    const mcqOptions = document.getElementById("mcqOptions");
+    const textAnswerSection = document.getElementById("textAnswerSection");
+    const revealButton = document.getElementById("revealButton");
+    
+    if (type === 'mcq') {
+        // MCQ: Parse options from front text and render as buttons
+        const parts = card.front.split('\n');
+        const optStart = parts.findIndex(l => l.trim().toLowerCase().startsWith('options:'));
+        
+        if (optStart !== -1) {
+            const question = parts.slice(0, optStart).join('\n');
+            cardFrontElement.textContent = question;
+            
+            const optionLines = parts.slice(optStart + 1).filter(Boolean);
+            if (optionLines.length && mcqOptions) {
+                mcqOptions.innerHTML = '';
+                optionLines.forEach((line, index) => {
+                    const cleanText = line.replace(/^\s*[A-Fa-f]\)\s*/, '');
+                    const button = document.createElement('button');
+                    button.className = 'mcq-option-button';
+                    button.innerHTML = `<span class="option-label">${String.fromCharCode(65 + index)}</span>${cleanText}`;
+                    button.onclick = () => submitMCQAnswer(index);
+                    mcqOptions.appendChild(button);
+                });
+                mcqOptions.style.display = 'grid';
+            }
+        } else {
+            cardFrontElement.textContent = card.front;
+        }
+        
+        // Hide reveal button for MCQ
+        if (revealButton) revealButton.style.display = 'none';
+        
+    } else if (type === 'cloze') {
+        // Cloze: Show text input
+        cardFrontElement.textContent = card.front;
+        if (textAnswerSection) {
+            textAnswerSection.style.display = 'block';
+        }
+        
+    } else {
+        // Definition/Application: Show question, reveal button, then self-grade
+        cardFrontElement.textContent = card.front;
+    }
+}
+
+function revealAnswer() {
+    const studyAnswerEl = document.getElementById('studyAnswer');
+    const selfGradeSection = document.getElementById('selfGradeSection');
+    const revealButton = document.getElementById('revealButton');
+    
+    if (!currentCardData) return;
+    
+    // Show the answer
+    if (studyAnswerEl) {
+        studyAnswerEl.textContent = currentCardData.back || '';
+        studyAnswerEl.style.display = 'block';
+    }
+    
+    // Hide reveal button
+    if (revealButton) {
+        revealButton.style.display = 'none';
+    }
+    
+    // Show self-grade buttons for definition/application/connection cards
+    const type = (currentCardData.type || '').toLowerCase();
+    if (type === 'definition' || type === 'application' || type === 'connection') {
+        if (selfGradeSection) {
+            selfGradeSection.style.display = 'block';
+        }
+    }
+}
+
+/**
+ * Submit MCQ answer (button click)
+ */
+async function submitMCQAnswer(optionIndex) {
+    await submitAnswerGeneric(optionIndex);
+}
+
+/**
+ * Submit text answer (for cloze cards)
  */
 async function submitAnswer() {
     const answerInput = document.getElementById("answerInput");
+    const feedbackElement = document.getElementById("feedback");
+    
+    if (!currentCardId) {
+        feedbackElement.textContent = "Please load a card first.";
+        feedbackElement.classList.add("warning");
+        return;
+    }
+    
+    const userAnswer = answerInput.value.trim();
+    if (!userAnswer) {
+        feedbackElement.textContent = "Please enter an answer.";
+        feedbackElement.classList.add("warning");
+        return;
+    }
+    
+    await submitAnswerGeneric(userAnswer);
+}
+
+/**
+ * Submit self-grade score (for definition/application cards)
+ */
+async function submitSelfGrade(score) {
+    await submitAnswerGeneric(score);
+}
+
+/**
+ * Generic answer submission handler
+ */
+async function submitAnswerGeneric(userAnswer) {
     const feedbackElement = document.getElementById("feedback");
     
     // Clear previous feedback
     feedbackElement.textContent = "";
     feedbackElement.className = "feedback";
     
-    // Validate that a card is loaded
     if (!currentCardId) {
-        feedbackElement.textContent = "Please load a card first by clicking 'Next Card'.";
-        feedbackElement.classList.add("warning");
-        return;
-    }
-    
-    const userAnswer = answerInput.value.trim();
-    
-    // Validate answer
-    if (!userAnswer) {
-        feedbackElement.textContent = "Please enter an answer before submitting.";
+        feedbackElement.textContent = "No card loaded.";
         feedbackElement.classList.add("warning");
         return;
     }
@@ -212,7 +363,7 @@ async function submitAnswer() {
             body: JSON.stringify({
                 card_id: currentCardId,
                 user_answer: userAnswer,
-                latency_ms: 1000  // Hardcoded latency for demo
+                latency_ms: 1000
             })
         });
         
@@ -457,7 +608,7 @@ function renderFilteredBrowse(filtered) {
                     html += `
                         <div class="topic-section micro-section" data-micro="${escapeHtml(mi.micro_topic_name)}">
                             <div class="topic-header">📚 ${escapeHtml(mi.micro_topic_name)} <span class="count-badge">(${mi.card_count} cards)</span>
-                                <button class="toggle-btn" onclick="toggleMicroSection(this)">Hide</button>
+                                <button class="toggle-btn" onclick="toggleMicroSection(this)">Show</button>
                             </div>
                             <div class="cards-grid">
                     `;
@@ -501,7 +652,7 @@ function renderFilteredBrowse(filtered) {
                 html += `
                     <div class="topic-section micro-section" data-topic="${escapeHtml(topic.name)}">
                         <div class="topic-header">📚 ${escapeHtml(topic.name)} <span class="count-badge">(${(topic.cards?.length || 0)} cards)</span>
-                            <button class="toggle-btn" onclick="toggleMicroSection(this)">Hide</button>
+                            <button class="toggle-btn" onclick="toggleMicroSection(this)">Show</button>
                         </div>
                         <div class="cards-grid">
                 `;
@@ -554,8 +705,8 @@ function clearBrowseFilters() {
 function toggleMicroSection(btn) {
     const section = btn.closest('.micro-section');
     if (!section) return;
-    const collapsed = section.classList.toggle('collapsed');
-    btn.textContent = collapsed ? 'Show' : 'Hide';
+    const expanded = section.classList.toggle('expanded');
+    btn.textContent = expanded ? 'Hide' : 'Show';
 }
 
 /**

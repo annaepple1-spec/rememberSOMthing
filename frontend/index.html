@@ -4,11 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>rememberSOMthing - AI Flashcard Trainer</title>
-    <link rel="stylesheet" href="style.css?v=2">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&family=Righteous&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
     <div class="container">
-        <h1>rememberSOMthing – AI Flashcard Trainer</h1>
+        <h1>rememberSOMthing</h1>
         
         <!-- Tab Navigation -->
         <div class="tab-navigation">
@@ -39,16 +42,52 @@
                 <div class="study-controls">
                     <button onclick="loadNextCard()" class="primary-button">Next Card</button>
                     <button onclick="studyAllDocuments()" class="secondary-button">Study All Documents</button>
+                    <button id="revealButton" onclick="revealAnswer()" class="secondary-button">Reveal Answer</button>
                 </div>
                 <p id="studyMode" class="study-mode-indicator"></p>
-                <div class="card-content">
-                    <p id="cardFront" class="card-front">Click "Next Card" to start studying.</p>
-                </div>
-                <div class="answer-section">
+                <article class="card-item">
+                    <div class="card-heading">
+                        <span id="studyTypeBadge" class="card-type-badge" style="display:none"></span>
+                        <span id="studyDifficulty" class="card-difficulty" style="display:none"></span>
+                    </div>
+                    <div class="card-front" id="cardFront">Click "Next Card" to start studying.</div>
+                    <div id="studyOptions" style="display:none"></div>
+                    <div class="card-back" id="studyAnswer" style="display:none"></div>
+                </article>
+                
+                <!-- MCQ Options (for MCQ cards) -->
+                <div id="mcqOptions" class="mcq-options-grid" style="display:none"></div>
+                
+                <!-- Text Answer Section (for Cloze cards) -->
+                <div id="textAnswerSection" class="answer-section" style="display:none">
                     <label for="answerInput">Your Answer:</label>
                     <textarea id="answerInput" rows="4" placeholder="Type your answer here..."></textarea>
                     <button onclick="submitAnswer()" class="primary-button">Submit Answer</button>
                 </div>
+                
+                <!-- Self-Grade Section (for Definition/Application cards) -->
+                <div id="selfGradeSection" class="self-grade-section" style="display:none">
+                    <p class="self-grade-prompt">How well did you know this answer?</p>
+                    <div class="self-grade-buttons">
+                        <button onclick="submitSelfGrade(0)" class="self-grade-button grade-0">
+                            <strong>0</strong>
+                            <span>No Idea</span>
+                        </button>
+                        <button onclick="submitSelfGrade(1)" class="self-grade-button grade-1">
+                            <strong>1</strong>
+                            <span>Barely</span>
+                        </button>
+                        <button onclick="submitSelfGrade(2)" class="self-grade-button grade-2">
+                            <strong>2</strong>
+                            <span>Good</span>
+                        </button>
+                        <button onclick="submitSelfGrade(3)" class="self-grade-button grade-3">
+                            <strong>3</strong>
+                            <span>Perfect</span>
+                        </button>
+                    </div>
+                </div>
+                
                 <div id="feedback" class="feedback"></div>
             </div>
 
@@ -92,6 +131,6 @@
         </div>
     </div>
 
-    <script src="app.js?v=2"></script>
+    <script src="app.js?v=6"></script>
 </body>
 </html>

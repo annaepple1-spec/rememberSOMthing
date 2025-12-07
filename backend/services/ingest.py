@@ -68,7 +68,10 @@ def _deck_to_cards(deck: dict, document_id: str) -> List[Card]:
         else:
             base_diff = 0.5
 
+        # Handle MCQ card type and options
+        mcq_correct_idx = None
         if fc_type_str == "mcq":
+            card_type = CardType.mcq  # Use MCQ enum value
             options = fc.get("options", [])
             correct_idx = fc.get("correct_option_index", 0)
             if options:
@@ -80,6 +83,7 @@ def _deck_to_cards(deck: dict, document_id: str) -> List[Card]:
                 front = (front or "Choose the correct answer:") + "\nOptions:\n" + "\n".join(opts_rendered)
                 if 0 <= correct_idx < len(options):
                     back = options[correct_idx]
+                    mcq_correct_idx = correct_idx
 
         return Card(
             id=str(uuid.uuid4()),
@@ -88,6 +92,7 @@ def _deck_to_cards(deck: dict, document_id: str) -> List[Card]:
             type=card_type,
             front=front,
             back=back,
+            correct_option_index=mcq_correct_idx,
             base_difficulty=base_diff,
         )
 
@@ -95,17 +100,23 @@ def _deck_to_cards(deck: dict, document_id: str) -> List[Card]:
 
     # Macros-first mapping
     macros = deck.get("macros") or []
+    print(f"[DECK_TO_CARDS] Found {len(macros)} macros")
     if macros:
         for macro in macros:
             macro_name = macro.get("name") or "Untitled Macro"
-            for micro in macro.get("micros", []):
+            micros = macro.get("micros", [])
+            print(f"[DECK_TO_CARDS] Macro '{macro_name}' has {len(micros)} micros")
+            for micro in micros:
                 micro_name = micro.get("name") or "Untitled Micro"
                 concepts = micro.get("concepts") or []
+                print(f"[DECK_TO_CARDS] Micro '{micro_name}' has {len(concepts)} concepts")
                 for concept in concepts:
                     flashcards = concept.get("flashcards") or []
+                    print(f"[DECK_TO_CARDS] Concept has {len(flashcards)} flashcards")
                     topic_label = f"{macro_name} - {micro_name}"
                     for fc in flashcards:
                         cards.append(_map_fc_to_card(fc, topic_label))
+        print(f"[DECK_TO_CARDS] Total cards created from macros: {len(cards)}")
         if cards:
             return cards
 
@@ -139,21 +150,30 @@ def process_pdf(file: UploadFile, db: Session) -> tuple[Document, int]:
     db.add(document)
 
     # Read PDF content
-    pdf_bytes = file.file.read()
-    pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
+    try:
+        pdf_bytes = file.file.read()
+        if not pdf_bytes:
+            raise ValueError("Empty file uploaded")
+        pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
+    except Exception as e:
+        print(f"[INGEST ERROR] Failed to open PDF: {e}")
+        db.rollback()
+        raise ValueError(f"Invalid PDF file: {str(e)}")
 
     full_text = ""
-    for page_num in range(pdf_document.page_count):
-        page = pdf_document[page_num]
-        full_text += page.get_text()
-
-    pdf_document.close()
+    try:
+        for page_num in range(pdf_document.page_count):
+            page = pdf_document[page_num]
+            full_text += page.get_text()
+    finally:
+        pdf_document.close()
 
     # Run multi-agent pipeline
     try:
         print(f"[INGEST] Running agent pipeline for: {filename}")
         deck = run_flashcard_agent_pipeline(document_text=full_text, title=filename)
         print(f"[INGEST] Agent pipeline completed. Macros: {len(deck.get('macros', []))} | Topics: {len(deck.get('topics', []))}")
+        print(f"[INGEST] Deck type: {type(deck)}, keys: {list(deck.keys())}")
     except Exception as e:
         # In case crew fails, fall back
         print(f"[INGEST ERROR] Agent pipeline failed: {e}")

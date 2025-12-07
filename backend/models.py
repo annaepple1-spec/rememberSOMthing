@@ -11,6 +11,7 @@ class CardType(str, enum.Enum):
     application = "application"
     connection = "connection"
     cloze = "cloze"
+    mcq = "mcq"
 
 
 class Document(Base):
@@ -38,6 +39,8 @@ class Card(Base):
     type = Column(Enum(CardType), nullable=False)
     front = Column(Text, nullable=False)
     back = Column(Text, nullable=False)
+    # For MCQ cards: stores the correct option index (0=A, 1=B, 2=C, 3=D)
+    correct_option_index = Column(Integer, nullable=True)
     base_difficulty = Column(Float, default=0.5)
 
     # Relationship
@@ -97,3 +100,26 @@ class MicroTopic(Base):
 
     macro_topic = relationship("MacroTopic", back_populates="micro_topics")
     cards = relationship("Card", back_populates="micro_topic")
+
+
+class UserTopicState(Base):
+    """User's mastery state for a specific micro topic (adaptive learning)."""
+    __tablename__ = "user_topic_states"
+
+    user_id = Column(String, primary_key=True)
+    micro_topic_id = Column(Integer, ForeignKey("micro_topics.id"), primary_key=True)
+    
+    # Knowledge score (0-100%) calculated from weighted card mastery
+    knowledge_score = Column(Float, default=0.0)
+    cards_seen = Column(Integer, default=0)
+    cards_mastered = Column(Integer, default=0)
+    
+    # Struggle weight (1.0 base, increased for struggling topics)
+    struggle_weight = Column(Float, default=1.0)
+    
+    # Average card score (0-3 scale) for this topic
+    avg_card_score = Column(Float, default=0.0)
+    
+    last_practice_at = Column(DateTime, nullable=True)
+    total_reviews = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)

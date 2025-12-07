@@ -332,7 +332,8 @@ def run_flashcard_agent_pipeline(document_text: str, title: str) -> Dict[str, An
         
         try:
             parsed = json.loads(result_str)
-            print(f"[CREW] Successfully parsed JSON with {len(parsed.get('topics', []))} topics")
+            print(f"[CREW] Successfully parsed JSON with {len(parsed.get('topics', []))} topics and {len(parsed.get('macros', []))} macros")
+            print(f"[CREW] Top-level keys in parsed result: {list(parsed.keys())}")
             return parsed
         except json.JSONDecodeError as e:
             print(f"[CREW] JSON parse error: {e}")
