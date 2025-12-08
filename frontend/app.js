@@ -55,10 +55,13 @@ function switchTab(tabName) {
 async function uploadPdf() {
     const fileInput = document.getElementById("pdfFile");
     const statusElement = document.getElementById("uploadStatus");
+    const loadingAnimation = document.getElementById("loadingAnimation");
+    const estimatedTimeEl = document.getElementById("estimatedTime");
     
     // Clear previous status
     statusElement.textContent = "";
     statusElement.className = "status-message";
+    loadingAnimation.style.display = "none";
     
     // Validate file selection
     if (!fileInput.files || fileInput.files.length === 0) {
@@ -76,20 +79,44 @@ async function uploadPdf() {
         return;
     }
     
-    // Show loading status
-    statusElement.textContent = "Uploading and processing PDF...";
-    statusElement.classList.add("info");
+    // Estimate time based on file size
+    const fileSizeMB = file.size / (1024 * 1024);
+    let estimatedTime = "1-2 minutes";
+    if (fileSizeMB < 1) {
+        estimatedTime = "30-60 seconds";
+    } else if (fileSizeMB < 5) {
+        estimatedTime = "1-2 minutes";
+    } else if (fileSizeMB < 10) {
+        estimatedTime = "2-3 minutes";
+    } else {
+        estimatedTime = "3-5 minutes";
+    }
+    estimatedTimeEl.textContent = estimatedTime;
+    
+    // Show loading animation
+    loadingAnimation.style.display = "block";
+    statusElement.style.display = "none";
     
     try {
         // Create form data
         const formData = new FormData();
         formData.append("file", file);
         
-        // Upload the file
+        // Upload the file with timeout handling
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
+        
         const response = await fetch(`${API_BASE_URL}/api/upload/pdf`, {
             method: "POST",
-            body: formData
+            body: formData,
+            signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
+        
+        // Hide loading animation
+        loadingAnimation.style.display = "none";
+        statusElement.style.display = "block";
         
         if (!response.ok) {
             throw new Error(`Upload failed: ${response.statusText}`);
@@ -110,7 +137,6 @@ async function uploadPdf() {
         
         // Show success message
         statusElement.textContent = `✓ Uploaded "${data.title}". Document ID: ${data.document_id}. Cards created: ${data.cards_created}.`;
-        statusElement.classList.remove("info");
         statusElement.classList.add("success");
         
         // Clear file input
@@ -118,8 +144,12 @@ async function uploadPdf() {
         
     } catch (error) {
         console.error("Upload error:", error);
+        
+        // Hide loading animation
+        loadingAnimation.style.display = "none";
+        statusElement.style.display = "block";
+        
         statusElement.textContent = `Error uploading PDF: ${error.message}`;
-        statusElement.classList.remove("info");
         statusElement.classList.add("error");
     }
 }

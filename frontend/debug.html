@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Connection Test</title>
+</head>
+<body>
+    <h1>Connection Debug Test</h1>
+    <div id="results"></div>
+    
+    <script>
+        const results = document.getElementById('results');
+        
+        async function testConnection() {
+            results.innerHTML += '<p>Testing connection...</p>';
+            
+            // Test 1: Health check
+            try {
+                const response = await fetch('http://127.0.0.1:8000/health');
+                const data = await response.json();
+                results.innerHTML += `<p style="color: green;">✓ Health check passed: ${JSON.stringify(data)}</p>`;
+            } catch (error) {
+                results.innerHTML += `<p style="color: red;">✗ Health check failed: ${error.message}</p>`;
+                console.error('Health check error:', error);
+            }
+            
+            // Test 2: CORS preflight
+            try {
+                const response = await fetch('http://127.0.0.1:8000/health', {
+                    method: 'OPTIONS'
+                });
+                results.innerHTML += `<p style="color: green;">✓ CORS preflight passed: ${response.status}</p>`;
+            } catch (error) {
+                results.innerHTML += `<p style="color: red;">✗ CORS preflight failed: ${error.message}</p>`;
+                console.error('CORS error:', error);
+            }
+            
+            // Test 3: API Base URL
+            results.innerHTML += `<p>API_BASE_URL in app.js should be: http://127.0.0.1:8000</p>`;
+            
+            // Test 4: Check if we're on the right port
+            results.innerHTML += `<p>Current page URL: ${window.location.href}</p>`;
+            results.innerHTML += `<p>You should access this at: http://127.0.0.1:8080/debug.html</p>`;
+        }
+        
+        testConnection();
+    </script>
+</body>
+</html>

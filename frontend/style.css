@@ -971,3 +971,102 @@ textarea:focus {
         grid-template-columns: repeat(2, 1fr);
     }
 }
+
+/* Loading Animation */
+.loading-container {
+    margin: 2rem 0;
+    padding: 2rem;
+    background: linear-gradient(135deg, var(--cream-100) 0%, var(--cream-200) 100%);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.loading-content {
+    text-align: center;
+}
+
+.bulldog-container {
+    height: 80px;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+}
+
+.bulldog {
+    font-size: 3rem;
+    position: absolute;
+    animation: walk 3s linear infinite;
+}
+
+@keyframes walk {
+    0% {
+        left: -60px;
+        transform: scaleX(1);
+    }
+    48% {
+        transform: scaleX(1);
+    }
+    50% {
+        left: 50%;
+        transform: scaleX(-1);
+    }
+    98% {
+        transform: scaleX(-1);
+    }
+    100% {
+        left: calc(100% + 60px);
+        transform: scaleX(1);
+    }
+}
+
+.loading-text {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--forest-700);
+    margin: 0.5rem 0;
+}
+
+.loading-time {
+    font-size: 0.95rem;
+    color: var(--forest-600);
+    margin: 0.5rem 0;
+}
+
+.loading-time span {
+    font-weight: 600;
+    color: var(--teal-600);
+}
+
+.progress-dots {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.progress-dots .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: var(--forest-500);
+    animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.progress-dots .dot:nth-child(1) {
+    animation-delay: -0.32s;
+}
+
+.progress-dots .dot:nth-child(2) {
+    animation-delay: -0.16s;
+}
+
+@keyframes bounce {
+    0%, 80%, 100% {
+        transform: scale(0);
+        opacity: 0.5;
+    }
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}

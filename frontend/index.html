@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&family=Righteous&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=5">
+    <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
     <div class="container">
@@ -33,6 +33,22 @@
                     <button onclick="uploadPdf()" class="primary-button">Upload & Generate Cards</button>
                 </div>
                 <p id="uploadStatus" class="status-message"></p>
+                
+                <!-- Loading Animation -->
+                <div id="loadingAnimation" class="loading-container" style="display: none;">
+                    <div class="loading-content">
+                        <div class="bulldog-container">
+                            <div class="bulldog">🐕</div>
+                        </div>
+                        <p class="loading-text">AI is analyzing your document...</p>
+                        <p class="loading-time">Estimated time: <span id="estimatedTime">1-2 minutes</span></p>
+                        <div class="progress-dots">
+                            <span class="dot"></span>
+                            <span class="dot"></span>
+                            <span class="dot"></span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Study Tab -->
@@ -131,6 +147,6 @@
         </div>
     </div>
 
-    <script src="app.js?v=6"></script>
+    <script src="app.js?v=7"></script>
 </body>
 </html>
