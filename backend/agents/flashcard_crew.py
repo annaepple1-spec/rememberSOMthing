@@ -98,7 +98,7 @@ def _build_tasks(
     """
     Builds the 4 sequential tasks for the flashcard generation pipeline.
     """
-    
+
     topic_outline_task = Task(
         description=(
             "Step 1: Define 4–8 Macro Topics and their Micro Topics (concept groups).\n\n"
@@ -294,7 +294,7 @@ def run_flashcard_agent_pipeline(document_text: str, title: str) -> Dict[str, An
 
     print(f"[CREW] Result type: {type(result)}")
     print(f"[CREW] Result attributes: {dir(result)}")
-    
+
     # CrewAI returns a CrewOutput object. Try to access the actual output.
     # Try common attributes: .raw, .output, .json_output, or just convert to string
     result_data = None
@@ -311,7 +311,7 @@ def run_flashcard_agent_pipeline(document_text: str, title: str) -> Dict[str, An
         # Fallback to string conversion
         result_data = str(result)
         print(f"[CREW] Using str(result)")
-    
+
     # If it's already a dict, return it
     if isinstance(result_data, dict):
         return result_data
@@ -327,9 +327,9 @@ def run_flashcard_agent_pipeline(document_text: str, title: str) -> Dict[str, An
         if result_str.endswith("```"):
             result_str = result_str[:-3]  # Remove trailing ```
         result_str = result_str.strip()
-        
+
         print(f"[CREW] Parsing JSON, first 200 chars: {result_str[:200]}")
-        
+
         try:
             parsed = json.loads(result_str)
             print(f"[CREW] Successfully parsed JSON with {len(parsed.get('topics', []))} topics and {len(parsed.get('macros', []))} macros")
@@ -344,7 +344,7 @@ def run_flashcard_agent_pipeline(document_text: str, title: str) -> Dict[str, An
                 "raw_text": document_text,
                 "raw_agent_output": result_str,
             }
-    
+
     # Fallback for unknown type
     return {
         "document_title": title,

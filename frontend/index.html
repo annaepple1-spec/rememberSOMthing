@@ -12,7 +12,7 @@
 <body>
     <div class="container">
         <h1>rememberSOMthing</h1>
-        
+
         <!-- Tab Navigation -->
         <div class="tab-navigation">
             <button class="tab-button active" onclick="switchTab('upload')">📤 Upload</button>
@@ -23,7 +23,7 @@
 
         <!-- Tab Content -->
         <div class="tab-content">
-            
+
             <!-- Upload Tab -->
             <div id="upload-tab" class="tab-panel active">
                 <h2>Upload PDF Document</h2>
@@ -33,7 +33,7 @@
                     <button onclick="uploadPdf()" class="primary-button">Upload & Generate Cards</button>
                 </div>
                 <p id="uploadStatus" class="status-message"></p>
-                
+
                 <!-- Loading Animation -->
                 <div id="loadingAnimation" class="loading-container" style="display: none;">
                     <div class="loading-content">
@@ -55,32 +55,41 @@
             <div id="study-tab" class="tab-panel">
                 <h2>Study Session</h2>
                 <p class="tab-description">Practice with your flashcards using spaced repetition.</p>
-                <div class="study-controls">
-                    <button onclick="loadNextCard()" class="primary-button">Next Card</button>
-                    <button onclick="studyAllDocuments()" class="secondary-button">Study All Documents</button>
-                    <button id="revealButton" onclick="revealAnswer()" class="secondary-button">Reveal Answer</button>
+
+                <!-- Document Filter -->
+                <div class="study-filter">
+                    <select id="studyDocFilter" onchange="changeStudyDocument()">
+                        <option value="">All Documents</option>
+                    </select>
                 </div>
+
                 <p id="studyMode" class="study-mode-indicator"></p>
                 <article class="card-item">
                     <div class="card-heading">
                         <span id="studyTypeBadge" class="card-type-badge" style="display:none"></span>
                         <span id="studyDifficulty" class="card-difficulty" style="display:none"></span>
                     </div>
-                    <div class="card-front" id="cardFront">Click "Next Card" to start studying.</div>
+                    <div class="card-front" id="cardFront">Select a document above and click "Next Card" to start studying.</div>
                     <div id="studyOptions" style="display:none"></div>
                     <div class="card-back" id="studyAnswer" style="display:none"></div>
                 </article>
-                
+
+                <!-- Study Control Buttons -->
+                <div class="study-controls">
+                    <button onclick="loadNextCard()" class="primary-button">Next Card</button>
+                    <button id="revealButton" onclick="revealAnswer()" class="secondary-button">Reveal Answer</button>
+                </div>
+
                 <!-- MCQ Options (for MCQ cards) -->
                 <div id="mcqOptions" class="mcq-options-grid" style="display:none"></div>
-                
+
                 <!-- Text Answer Section (for Cloze cards) -->
                 <div id="textAnswerSection" class="answer-section" style="display:none">
                     <label for="answerInput">Your Answer:</label>
                     <textarea id="answerInput" rows="4" placeholder="Type your answer here..."></textarea>
                     <button onclick="submitAnswer()" class="primary-button">Submit Answer</button>
                 </div>
-                
+
                 <!-- Self-Grade Section (for Definition/Application cards) -->
                 <div id="selfGradeSection" class="self-grade-section" style="display:none">
                     <p class="self-grade-prompt">How well did you know this answer?</p>
@@ -103,7 +112,7 @@
                         </button>
                     </div>
                 </div>
-                
+
                 <div id="feedback" class="feedback"></div>
             </div>
 
@@ -137,11 +146,50 @@
             <div id="progress-tab" class="tab-panel">
                 <h2>Progress & Mastery</h2>
                 <p class="tab-description">Track your learning progress across all documents.</p>
-                <div class="progress-controls">
-                    <input type="text" id="docId" placeholder="Document ID (optional)">
-                    <button onclick="checkProgress()" class="primary-button">Check Progress</button>
+
+                <!-- Document Filter at Top -->
+                <div class="progress-section">
+                    <div class="progress-controls">
+                        <select id="progressDocFilter" onchange="refreshProgressStats()">
+                            <option value="">All Documents</option>
+                        </select>
+                    </div>
                 </div>
-                <p id="progressResult" class="status-message"></p>
+
+                <!-- Overall Stats Section -->
+                <div class="progress-section">
+                    <h3 id="statsTitle">📊 Overall Statistics</h3>
+                    <div id="overallStats" class="stats-container">
+                        <p class="info">Loading statistics...</p>
+                    </div>
+                </div>
+
+                <!-- Mastery Distribution Section -->
+                <div class="progress-section">
+                    <h3>🎯 Mastery Distribution</h3>
+                    <p class="tab-description">Breakdown of cards by mastery level (0-3 rating).</p>
+                    <div id="masteryDistribution" class="mastery-container">
+                        <p class="info">Loading mastery data...</p>
+                    </div>
+                </div>
+
+                <!-- Macro Topics Progress Section -->
+                <div class="progress-section" id="macroTopicsSection" style="display:none">
+                    <h3>📚 Macro Topics Progress</h3>
+                    <p class="tab-description">Progress breakdown by macro topic in this document.</p>
+                    <div id="macroTopicsProgress" class="documents-progress-container">
+                        <p class="info">Loading macro topics...</p>
+                    </div>
+                </div>
+
+                <!-- Spaced Repetition Metrics Section -->
+                <div class="progress-section">
+                    <h3>🔄 Spaced Repetition Schedule</h3>
+                    <p class="tab-description">Review schedule and retention metrics.</p>
+                    <div id="spacedRepetitionMetrics" class="spaced-rep-container">
+                        <p class="info">Loading schedule...</p>
+                    </div>
+                </div>
             </div>
 
         </div>
