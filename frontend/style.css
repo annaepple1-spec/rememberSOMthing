@@ -433,12 +433,15 @@ h2 {
 }
 
 .card-back {
-    padding-top: var(--space-2);
-    margin-top: var(--space-2);
-    font-size: var(--text-sm);
-    color: var(--warm-gray-700);
-    border-top: 2px dotted var(--cream-400);
-    line-height: 1.7;
+    padding: var(--space-3);
+    margin-top: var(--space-3);
+    font-size: var(--text-base);
+    color: var(--forest-900);
+    background: linear-gradient(135deg, rgba(90, 125, 92, 0.05) 0%, rgba(107, 159, 164, 0.05) 100%);
+    border-top: 3px solid var(--forest-500);
+    border-radius: var(--radius-md);
+    line-height: 1.8;
+    font-weight: 500;
 }
 
 .mcq-options {

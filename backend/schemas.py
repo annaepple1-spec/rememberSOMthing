@@ -6,6 +6,7 @@ class CardOut(BaseModel):
     """Schema for card output."""
     id: str
     front: str
+    back: str
     type: str
     topic: Optional[str] = None
 
