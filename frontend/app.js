@@ -307,9 +307,26 @@ function revealAnswer() {
     
     if (!currentCardData) return;
     
-    // Show the answer
+    // Show the answer with a label
     if (studyAnswerEl) {
-        studyAnswerEl.textContent = currentCardData.back || '';
+        // Create answer content with label
+        const answerLabel = document.createElement('div');
+        answerLabel.style.fontSize = '0.875rem';
+        answerLabel.style.color = 'var(--warm-gray-600)';
+        answerLabel.style.fontWeight = '600';
+        answerLabel.style.marginBottom = '0.5rem';
+        answerLabel.style.textTransform = 'uppercase';
+        answerLabel.style.letterSpacing = '0.05em';
+        answerLabel.textContent = '✓ Answer';
+        
+        studyAnswerEl.innerHTML = '';
+        studyAnswerEl.appendChild(answerLabel);
+        
+        // Add answer text
+        const answerText = document.createElement('div');
+        answerText.textContent = currentCardData.back || '';
+        studyAnswerEl.appendChild(answerText);
+        
         studyAnswerEl.style.display = 'block';
     }
     

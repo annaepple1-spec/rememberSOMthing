@@ -25,6 +25,7 @@ def next_card(document_id: Optional[str] = None, db: Session = Depends(get_db)):
         return CardOut(
             id=card.id,
             front=card.front,
+            back=card.back,
             type=card.type.value,
             topic=card.topic
         )
@@ -56,6 +57,7 @@ def next_card_adaptive(document_id: str, db: Session = Depends(get_db)):
         return CardOut(
             id=card.id,
             front=card.front,
+            back=card.back,
             type=card.type.value,
             topic=card.topic
         )
