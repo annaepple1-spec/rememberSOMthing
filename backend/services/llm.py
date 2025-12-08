@@ -23,26 +23,26 @@ else:
 def generate_qa_cards_from_text(text: str, max_cards: int = 10) -> List[Dict]:
     """
     Use AI to identify key concepts in text and generate Q&A flashcards.
-    
+
     Args:
         text: The document text to analyze
         max_cards: Maximum number of cards to generate (default 10)
-    
+
     Returns:
         List of card dictionaries with 'question', 'answer', 'topic', and 'difficulty'
     """
     if not llm:
         print("[LLM] OpenAI API not configured, using fallback")
         return []
-    
+
     if not text or len(text.strip()) < 100:
         print("[LLM] Text too short for AI analysis")
         return []
-    
+
     try:
         # Truncate text to avoid token limits (keep first 4000 chars)
         text_excerpt = text[:4000]
-        
+
         prompt = f"""You are an expert educational content creator. Analyze the following text and create {max_cards} important study questions.
 
 For EACH question:
@@ -61,19 +61,19 @@ Return ONLY a valid JSON array with NO additional text. Format:
   {{"question": "How does...", "answer": "It works by...", "topic": "Process Description", "difficulty": "medium"}}
 ]
 
-IMPORTANT: 
+IMPORTANT:
 - Return ONLY the JSON array
 - Ensure valid JSON syntax
 - Create exactly {max_cards} cards
 - Make questions require knowledge of the text
 """
-        
+
         print(f"[LLM] Generating {max_cards} Q&A cards using GPT-3.5...")
         response = llm.invoke(prompt)
-        
+
         # Parse the response
         response_text = response.content.strip()
-        
+
         # Try to extract JSON from the response
         try:
             # Find JSON array in response
@@ -88,7 +88,7 @@ IMPORTANT:
         except json.JSONDecodeError as e:
             print(f"[LLM] Failed to parse JSON response: {e}")
             return []
-        
+
         # Validate and normalize cards
         validated_cards = []
         for i, card in enumerate(cards):
@@ -99,10 +99,10 @@ IMPORTANT:
                     'topic': str(card.get('topic', f'Concept {i+1}')).strip()[:50],
                     'difficulty': str(card.get('difficulty', 'medium')).lower()
                 })
-        
+
         print(f"[LLM] Successfully generated {len(validated_cards)} cards")
         return validated_cards
-    
+
     except Exception as e:
         print(f"[LLM ERROR] Failed to generate cards: {e}")
         import traceback
@@ -113,30 +113,30 @@ IMPORTANT:
 def grade_answer(question: str, correct_answer: str, student_answer: str) -> dict:
     """
     Temporary fake grader for student answers.
-    
+
     Rules:
     - score = 0 if student answer is empty
     - score = 3 if student answer (lowercased) contains the correct answer text
     - otherwise score = 1
-    
+
     Returns:
         dict: {"score": int, "explanation": str}
     """
     student_answer_lower = student_answer.strip().lower()
     correct_answer_lower = correct_answer.strip().lower()
-    
+
     if not student_answer_lower:
         return {
             "score": 0,
             "explanation": "No answer provided."
         }
-    
+
     if correct_answer_lower in student_answer_lower:
         return {
             "score": 3,
             "explanation": "Great! Your answer contains the key information."
         }
-    
+
     return {
         "score": 1,
         "explanation": "Your answer is partially correct, but missing key details."

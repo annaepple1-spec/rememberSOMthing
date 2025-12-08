@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 from pydantic import BaseModel, ConfigDict
 
 
@@ -16,7 +16,7 @@ class CardOut(BaseModel):
 class AnswerRequest(BaseModel):
     """Schema for answer submission."""
     card_id: str
-    user_answer: str
+    user_answer: Union[str, int]
     latency_ms: int
 
 

@@ -9,22 +9,22 @@ const API_BASE_URL = "http://127.0.0.1:8000";
  */
 function switchTab(tabName) {
     console.log('Switching to tab:', tabName);
-    
+
     // Get all tab panels and buttons
     const allPanels = document.querySelectorAll('.tab-panel');
     const allButtons = document.querySelectorAll('.tab-button');
-    
+
     // Hide all panels
     allPanels.forEach(panel => {
         panel.classList.remove('active');
         panel.style.display = 'none';
     });
-    
+
     // Deactivate all buttons
     allButtons.forEach(button => {
         button.classList.remove('active');
     });
-    
+
     // Show the selected panel
     const targetPanel = document.getElementById(tabName + '-tab');
     if (targetPanel) {
@@ -34,7 +34,7 @@ function switchTab(tabName) {
     } else {
         console.error('Panel not found:', tabName + '-tab');
     }
-    
+
     // Activate the corresponding button
     allButtons.forEach(button => {
         const onclick = button.getAttribute('onclick');
@@ -42,10 +42,21 @@ function switchTab(tabName) {
             button.classList.add('active');
         }
     });
-    
+
     // Auto-load content for browse tab
     if (tabName === 'browse') {
         loadAllCards();
+    }
+
+    // Auto-load content for progress tab
+    if (tabName === 'progress') {
+        populateProgressDocumentFilter();
+        refreshProgressStats();
+    }
+
+    // Auto-load content for study tab
+    if (tabName === 'study') {
+        populateStudyDocumentFilter();
     }
 }
 
@@ -57,28 +68,28 @@ async function uploadPdf() {
     const statusElement = document.getElementById("uploadStatus");
     const loadingAnimation = document.getElementById("loadingAnimation");
     const estimatedTimeEl = document.getElementById("estimatedTime");
-    
+
     // Clear previous status
     statusElement.textContent = "";
     statusElement.className = "status-message";
     loadingAnimation.style.display = "none";
-    
+
     // Validate file selection
     if (!fileInput.files || fileInput.files.length === 0) {
         statusElement.textContent = "Please select a PDF file first.";
         statusElement.classList.add("error");
         return;
     }
-    
+
     const file = fileInput.files[0];
-    
+
     // Validate file type
     if (!file.name.toLowerCase().endsWith(".pdf")) {
         statusElement.textContent = "Please select a valid PDF file.";
         statusElement.classList.add("error");
         return;
     }
-    
+
     // Estimate time based on file size
     const fileSizeMB = file.size / (1024 * 1024);
     let estimatedTime = "1-2 minutes";
@@ -92,63 +103,63 @@ async function uploadPdf() {
         estimatedTime = "3-5 minutes";
     }
     estimatedTimeEl.textContent = estimatedTime;
-    
+
     // Show loading animation
     loadingAnimation.style.display = "block";
     statusElement.style.display = "none";
-    
+
     try {
         // Create form data
         const formData = new FormData();
         formData.append("file", file);
-        
+
         // Upload the file with timeout handling
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
-        
+
         const response = await fetch(`${API_BASE_URL}/api/upload/pdf`, {
             method: "POST",
             body: formData,
             signal: controller.signal
         });
-        
+
         clearTimeout(timeoutId);
-        
+
         // Hide loading animation
         loadingAnimation.style.display = "none";
         statusElement.style.display = "block";
-        
+
         if (!response.ok) {
             throw new Error(`Upload failed: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
-        
+
         // Store document ID globally
         currentDocumentId = data.document_id;
-        
+
         // Update the document ID input in the Progress section
         document.getElementById("docId").value = data.document_id;
-        
+
         // Update study mode indicator
         const modeIndicator = document.getElementById("studyMode");
         modeIndicator.textContent = `📖 Ready to study: ${data.title}`;
         modeIndicator.className = "study-mode-indicator success";
-        
+
         // Show success message
         statusElement.textContent = `✓ Uploaded "${data.title}". Document ID: ${data.document_id}. Cards created: ${data.cards_created}.`;
         statusElement.classList.add("success");
-        
+
         // Clear file input
         fileInput.value = "";
-        
+
     } catch (error) {
         console.error("Upload error:", error);
-        
+
         // Hide loading animation
         loadingAnimation.style.display = "none";
         statusElement.style.display = "block";
-        
+
         statusElement.textContent = `Error uploading PDF: ${error.message}`;
         statusElement.classList.add("error");
     }
@@ -163,10 +174,12 @@ async function loadNextCard() {
     const typeBadgeEl = document.getElementById("studyTypeBadge");
     const difficultyEl = document.getElementById("studyDifficulty");
     const feedbackElement = document.getElementById("feedback");
-    
+    const nextCardButton = document.querySelector('.study-controls .primary-button');
+    const revealButton = document.getElementById('revealButton');
+
     // Clear all answer sections
     clearAnswerSections();
-    
+
     // Clear previous state
     feedbackElement.textContent = "";
     feedbackElement.className = "feedback";
@@ -175,47 +188,66 @@ async function loadNextCard() {
     if (studyAnswerEl) { studyAnswerEl.style.display = 'none'; studyAnswerEl.textContent = ''; }
     if (typeBadgeEl) { typeBadgeEl.style.display = 'none'; typeBadgeEl.textContent = ''; typeBadgeEl.className = 'card-type-badge'; }
     if (difficultyEl) { difficultyEl.style.display = 'none'; difficultyEl.textContent = ''; difficultyEl.className = 'card-difficulty'; }
-    
+
     // Show loading state
     cardFrontElement.textContent = "Loading next card...";
-    
+
+    // Get selected document from dropdown
+    const docSelect = document.getElementById("studyDocFilter");
+    const selectedDocId = docSelect ? docSelect.value : null;
+    currentDocumentId = selectedDocId || null;
+
     try {
         // Use adaptive card selection if document is selected
         let url = `${API_BASE_URL}/api/session/next-card`;
         if (currentDocumentId) {
             url = `${API_BASE_URL}/api/session/next-card-adaptive?document_id=${encodeURIComponent(currentDocumentId)}`;
         }
-        
+
         const response = await fetch(url);
-        
+
         if (!response.ok) {
             throw new Error(`Failed to load card: ${response.statusText}`);
         }
-        
+
         const card = await response.json();
-        
+
         // Check if no cards available
         if (!card || card === null) {
             cardFrontElement.textContent = "No cards available or all done for now.";
             currentCardId = null;
             return;
         }
-        
+
         // Store card data
         currentCardId = card.id;
         currentCardData = card;
         const type = (card.type || '').toLowerCase();
-        
+
         // Show type badge
         if (typeBadgeEl && type) {
             typeBadgeEl.textContent = type;
             typeBadgeEl.className = `card-type-badge card-type-${type}`;
             typeBadgeEl.style.display = 'inline-block';
         }
-        
+
         // Render card based on type
         renderCardByType(card, type, cardFrontElement);
-        
+
+        // Show appropriate button based on card type
+        const nextCardBtn = document.querySelector('.study-controls .primary-button');
+        const revealBtn = document.getElementById('revealButton');
+
+        if (type === 'mcq' || type === 'cloze') {
+            // For MCQ and Cloze, hide both buttons (they submit answers directly)
+            if (nextCardBtn) nextCardBtn.style.display = 'none';
+            if (revealBtn) revealBtn.style.display = 'none';
+        } else {
+            // For Definition/Application, show Reveal Answer button
+            if (nextCardBtn) nextCardBtn.style.display = 'none';
+            if (revealBtn) revealBtn.style.display = 'inline-block';
+        }
+
     } catch (error) {
         console.error("Error loading card:", error);
         cardFrontElement.textContent = `Error loading card: ${error.message}`;
@@ -231,7 +263,7 @@ function clearAnswerSections() {
     const selfGradeSection = document.getElementById("selfGradeSection");
     const answerInput = document.getElementById("answerInput");
     const revealButton = document.getElementById("revealButton");
-    
+
     if (mcqOptions) {
         mcqOptions.style.display = 'none';
         mcqOptions.innerHTML = '';
@@ -246,27 +278,31 @@ function clearAnswerSections() {
         selfGradeSection.style.display = 'none';
     }
     if (revealButton) {
-        revealButton.style.display = 'inline-block';
+        revealButton.style.display = 'none';
     }
-}
 
-/**
+    // Hide Next Card button when clearing (will be shown by loadNextCard after card loads)
+    const nextCardButton = document.querySelector('.study-controls .primary-button');
+    if (nextCardButton) {
+        nextCardButton.style.display = 'none';
+    }
+}/**
  * Render card based on its type
  */
 function renderCardByType(card, type, cardFrontElement) {
     const mcqOptions = document.getElementById("mcqOptions");
     const textAnswerSection = document.getElementById("textAnswerSection");
     const revealButton = document.getElementById("revealButton");
-    
+
     if (type === 'mcq') {
         // MCQ: Parse options from front text and render as buttons
         const parts = card.front.split('\n');
         const optStart = parts.findIndex(l => l.trim().toLowerCase().startsWith('options:'));
-        
+
         if (optStart !== -1) {
             const question = parts.slice(0, optStart).join('\n');
             cardFrontElement.textContent = question;
-            
+
             const optionLines = parts.slice(optStart + 1).filter(Boolean);
             if (optionLines.length && mcqOptions) {
                 mcqOptions.innerHTML = '';
@@ -283,17 +319,14 @@ function renderCardByType(card, type, cardFrontElement) {
         } else {
             cardFrontElement.textContent = card.front;
         }
-        
-        // Hide reveal button for MCQ
-        if (revealButton) revealButton.style.display = 'none';
-        
+
     } else if (type === 'cloze') {
         // Cloze: Show text input
         cardFrontElement.textContent = card.front;
         if (textAnswerSection) {
             textAnswerSection.style.display = 'block';
         }
-        
+
     } else {
         // Definition/Application: Show question, reveal button, then self-grade
         cardFrontElement.textContent = card.front;
@@ -304,9 +337,9 @@ function revealAnswer() {
     const studyAnswerEl = document.getElementById('studyAnswer');
     const selfGradeSection = document.getElementById('selfGradeSection');
     const revealButton = document.getElementById('revealButton');
-    
+
     if (!currentCardData) return;
-    
+
     // Show the answer with a label
     if (studyAnswerEl) {
         // Create answer content with label
@@ -318,23 +351,28 @@ function revealAnswer() {
         answerLabel.style.textTransform = 'uppercase';
         answerLabel.style.letterSpacing = '0.05em';
         answerLabel.textContent = '✓ Answer';
-        
+
         studyAnswerEl.innerHTML = '';
         studyAnswerEl.appendChild(answerLabel);
-        
+
         // Add answer text
         const answerText = document.createElement('div');
         answerText.textContent = currentCardData.back || '';
         studyAnswerEl.appendChild(answerText);
-        
+
         studyAnswerEl.style.display = 'block';
     }
-    
-    // Hide reveal button
+
+    // Hide reveal button, show Next Card button
     if (revealButton) {
         revealButton.style.display = 'none';
     }
-    
+
+    const nextCardButton = document.querySelector('.study-controls .primary-button');
+    if (nextCardButton) {
+        nextCardButton.style.display = 'inline-block';
+    }
+
     // Show self-grade buttons for definition/application/connection cards
     const type = (currentCardData.type || '').toLowerCase();
     if (type === 'definition' || type === 'application' || type === 'connection') {
@@ -357,20 +395,20 @@ async function submitMCQAnswer(optionIndex) {
 async function submitAnswer() {
     const answerInput = document.getElementById("answerInput");
     const feedbackElement = document.getElementById("feedback");
-    
+
     if (!currentCardId) {
         feedbackElement.textContent = "Please load a card first.";
         feedbackElement.classList.add("warning");
         return;
     }
-    
+
     const userAnswer = answerInput.value.trim();
     if (!userAnswer) {
         feedbackElement.textContent = "Please enter an answer.";
         feedbackElement.classList.add("warning");
         return;
     }
-    
+
     await submitAnswerGeneric(userAnswer);
 }
 
@@ -386,21 +424,21 @@ async function submitSelfGrade(score) {
  */
 async function submitAnswerGeneric(userAnswer) {
     const feedbackElement = document.getElementById("feedback");
-    
+
     // Clear previous feedback
     feedbackElement.textContent = "";
     feedbackElement.className = "feedback";
-    
+
     if (!currentCardId) {
         feedbackElement.textContent = "No card loaded.";
         feedbackElement.classList.add("warning");
         return;
     }
-    
+
     // Show loading state
     feedbackElement.textContent = "Grading your answer...";
     feedbackElement.classList.add("info");
-    
+
     try {
         const response = await fetch(`${API_BASE_URL}/api/session/answer`, {
             method: "POST",
@@ -413,18 +451,18 @@ async function submitAnswerGeneric(userAnswer) {
                 latency_ms: 1000
             })
         });
-        
+
         if (!response.ok) {
             throw new Error(`Failed to submit answer: ${response.statusText}`);
         }
-        
+
         const result = await response.json();
-        
+
         // Display feedback with score
         const scoreEmoji = result.score === 3 ? "🎉" : result.score === 2 ? "👍" : result.score === 1 ? "📝" : "❌";
         feedbackElement.textContent = `${scoreEmoji} Score: ${result.score}/3 - ${result.explanation}`;
         feedbackElement.className = "feedback";
-        
+
         if (result.score >= 2) {
             feedbackElement.classList.add("success");
         } else if (result.score === 1) {
@@ -432,7 +470,7 @@ async function submitAnswerGeneric(userAnswer) {
         } else {
             feedbackElement.classList.add("error");
         }
-        
+
     } catch (error) {
         console.error("Error submitting answer:", error);
         feedbackElement.textContent = `Error submitting answer: ${error.message}`;
@@ -442,19 +480,78 @@ async function submitAnswerGeneric(userAnswer) {
 }
 
 /**
- * Study all documents (clear document filter)
+ * Populate document filter dropdown in study tab
  */
-function studyAllDocuments() {
-    currentDocumentId = null;
+async function populateStudyDocumentFilter() {
+    const docSelect = document.getElementById("studyDocFilter");
+    if (!docSelect) return;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/progress/browse`);
+        if (!response.ok) {
+            throw new Error(`Failed to load documents: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Filter out demo/sample documents
+        const isDemo = (title) => {
+            const t = (title || '').toLowerCase();
+            return t.includes('demo') || t.includes('sample') || t.includes('example');
+        };
+
+        const realDocs = (data.documents || []).filter(d => !isDemo(d.title || d.name));
+
+        // Build options
+        const options = ['<option value="">All Documents</option>'];
+        realDocs.forEach(d => {
+            const name = d.title || d.name;
+            const id = d.document_id;
+            options.push(`<option value="${id}">${escapeHtml(name)}</option>`);
+        });
+
+        docSelect.innerHTML = options.join('');
+    } catch (error) {
+        console.error("Error loading documents for study filter:", error);
+    }
+}
+
+/**
+ * Change study document based on dropdown selection
+ */
+function changeStudyDocument() {
+    const docSelect = document.getElementById("studyDocFilter");
     const modeIndicator = document.getElementById("studyMode");
-    modeIndicator.textContent = "📚 Studying all documents";
-    modeIndicator.className = "study-mode-indicator info";
-    
+
+    if (!docSelect) return;
+
+    currentDocumentId = docSelect.value || null;
+
+    // Update mode indicator
+    if (currentDocumentId) {
+        const selectedOption = docSelect.options[docSelect.selectedIndex];
+        const docName = selectedOption ? selectedOption.text : "Document";
+        modeIndicator.textContent = `📖 Studying: ${docName}`;
+        modeIndicator.className = "study-mode-indicator info";
+    } else {
+        modeIndicator.textContent = "📚 Studying all documents";
+        modeIndicator.className = "study-mode-indicator info";
+    }
+
     // Clear the card display
-    document.getElementById("cardFront").textContent = "Click 'Next Card' to study from all documents.";
+    document.getElementById("cardFront").textContent = "Click 'Next Card' to start studying.";
     document.getElementById("answerInput").value = "";
     document.getElementById("feedback").textContent = "";
     document.getElementById("feedback").className = "feedback";
+
+    // Clear answer sections
+    clearAnswerSections();
+
+    // Show Next Card button for initial state
+    const nextCardButton = document.querySelector('.study-controls .primary-button');
+    if (nextCardButton) {
+        nextCardButton.style.display = 'inline-block';
+    }
 }
 
 /**
@@ -462,31 +559,31 @@ function studyAllDocuments() {
  */
 async function loadAllCards() {
     const browseContent = document.getElementById("browseContent");
-    
+
     // Show loading state
     browseContent.innerHTML = "<p class='info'>Loading all cards...</p>";
-    
+
     try {
         const response = await fetch(`${API_BASE_URL}/api/progress/browse`);
-        
+
         if (!response.ok) {
             throw new Error(`Failed to load cards: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
         // cache raw data for client-side filtering
         window.__browseData = data;
-        
+
         if (!data.documents || data.documents.length === 0) {
             browseContent.innerHTML = "<p class='info'>No cards found. Upload a PDF to get started!</p>";
             return;
         }
-        
+
         // Populate filters and render using unified renderer
         populateBrowseFilters(data);
         const filtered = applyBrowseFilters(data);
         renderFilteredBrowse(filtered);
-        
+
     } catch (error) {
         console.error("Error loading cards:", error);
         browseContent.innerHTML = `<p class='error'>Error loading cards: ${error.message}</p>`;
@@ -515,54 +612,81 @@ function populateBrowseFilters(data) {
     });
     docSel.innerHTML = docOptions.join('');
 
-    // Populate macros and micros (cascading)
-    const macrosSet = new Set();
-    const macroToMicros = new Map();
-    data.documents.forEach(d => {
-        const name = d.title || d.name;
-        if (isDemo(name)) return;
-        if (d.macros) {
-            d.macros.forEach(m => {
-                macrosSet.add(m.macro_topic_name);
-                const list = macroToMicros.get(m.macro_topic_name) || new Set();
-                m.micro_topics.forEach(mi => list.add(mi.micro_topic_name));
-                macroToMicros.set(m.macro_topic_name, list);
-            });
-        } else if (d.topics) {
-            // Legacy: derive macros from left part of "Macro - Micro"
-            d.topics.forEach(t => {
-                const parts = (t.name || '').split(' - ');
-                const macro = parts[0] || 'Uncategorized';
-                const micro = parts[1] || 'General';
-                macrosSet.add(macro);
-                const list = macroToMicros.get(macro) || new Set();
-                list.add(micro);
-                macroToMicros.set(macro, list);
-            });
-        }
-    });
+    // Helper function to build macro/micro options based on selected document
+    const buildMacroMicroOptions = (selectedDoc) => {
+        console.log('[FILTER] Building macro/micro for document:', selectedDoc || 'ALL');
+        const macrosSet = new Set();
+        const macroToMicros = new Map();
+
+        // Filter data by selected document (or all if none selected)
+        const filteredDocs = selectedDoc
+            ? data.documents.filter(d => (d.title || d.name) === selectedDoc)
+            : data.documents.filter(d => !isDemo(d.title || d.name));
+
+        console.log('[FILTER] Filtered to', filteredDocs.length, 'documents');
+
+        filteredDocs.forEach(d => {
+            if (d.macros) {
+                d.macros.forEach(m => {
+                    macrosSet.add(m.macro_topic_name);
+                    const list = macroToMicros.get(m.macro_topic_name) || new Set();
+                    m.micro_topics.forEach(mi => list.add(mi.micro_topic_name));
+                    macroToMicros.set(m.macro_topic_name, list);
+                });
+            } else if (d.topics) {
+                // Legacy: derive macros from left part of "Macro - Micro"
+                d.topics.forEach(t => {
+                    const parts = (t.name || '').split(' - ');
+                    const macro = parts[0] || 'Uncategorized';
+                    const micro = parts[1] || 'General';
+                    macrosSet.add(macro);
+                    const list = macroToMicros.get(macro) || new Set();
+                    list.add(micro);
+                    macroToMicros.set(macro, list);
+                });
+            }
+        });
+
+        return { macrosSet, macroToMicros };
+    };
+
+    // Initial population (all documents)
+    let { macrosSet, macroToMicros } = buildMacroMicroOptions('');
     const macroOptions = ['<option value="">All Macros</option>', ...Array.from(macrosSet).map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`)];
     macroSel.innerHTML = macroOptions.join('');
-    // Initialize micros for current macro selection
-    const currentMacro = macroSel.value;
-    const microOptions = ['<option value="">All Micros</option>'];
-    if (currentMacro && macroToMicros.has(currentMacro)) {
-        microOptions.push(...Array.from(macroToMicros.get(currentMacro)).map(mi => `<option value="${escapeHtml(mi)}">${escapeHtml(mi)}</option>`));
-    } else {
-        // Aggregate all micros
-        const allMicros = new Set();
-        for (const list of macroToMicros.values()) {
-            list.forEach(v => allMicros.add(v));
-        }
-        microOptions.push(...Array.from(allMicros).map(mi => `<option value="${escapeHtml(mi)}">${escapeHtml(mi)}</option>`));
+
+    // Initialize micros
+    const allMicros = new Set();
+    for (const list of macroToMicros.values()) {
+        list.forEach(v => allMicros.add(v));
     }
+    const microOptions = ['<option value="">All Micros</option>', ...Array.from(allMicros).map(mi => `<option value="${escapeHtml(mi)}">${escapeHtml(mi)}</option>`)];
     microSel.innerHTML = microOptions.join('');
 
     ['filterDocument','filterMacro','filterMicro','filterType','filterDifficulty'].forEach(id => {
         const el = document.getElementById(id);
         el.onchange = () => {
+            // Rebuild macros and micros when document changes
+            if (id === 'filterDocument') {
+                const selectedDoc = docSel.value;
+                const { macrosSet, macroToMicros } = buildMacroMicroOptions(selectedDoc);
+
+                // Rebuild macros dropdown
+                const macroOptions = ['<option value="">All Macros</option>', ...Array.from(macrosSet).map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`)];
+                macroSel.innerHTML = macroOptions.join('');
+
+                // Rebuild micros dropdown
+                const allMicros = new Set();
+                for (const list of macroToMicros.values()) list.forEach(v => allMicros.add(v));
+                const microOptions = ['<option value="">All Micros</option>', ...Array.from(allMicros).map(mi => `<option value="${escapeHtml(mi)}">${escapeHtml(mi)}</option>`)];
+                microSel.innerHTML = microOptions.join('');
+            }
+
             // Rebuild micros when macro changes
             if (id === 'filterMacro') {
+                const selectedDoc = docSel.value;
+                const { macroToMicros } = buildMacroMicroOptions(selectedDoc);
+
                 const selectedMacro = macroSel.value;
                 const microOptions = ['<option value="">All Micros</option>'];
                 if (selectedMacro && macroToMicros.has(selectedMacro)) {
@@ -769,48 +893,404 @@ function escapeHtml(text) {
  * Check progress for a document
  */
 async function checkProgress() {
-    const docIdInput = document.getElementById("docId");
+    const docSelect = document.getElementById("progressDocFilter");
     const progressResultElement = document.getElementById("progressResult");
-    
+
     // Clear previous result
     progressResultElement.textContent = "";
     progressResultElement.className = "status-message";
-    
-    const docId = docIdInput.value.trim();
-    
-    // Validate document ID
+
+    const docId = docSelect.value.trim();
+
+    // Validate document selection
     if (!docId) {
-        progressResultElement.textContent = "Please enter a document ID.";
+        progressResultElement.textContent = "Please select a document.";
         progressResultElement.classList.add("error");
         return;
     }
-    
+
     // Show loading state
     progressResultElement.textContent = "Loading progress...";
     progressResultElement.classList.add("info");
-    
+
     try {
         const response = await fetch(`${API_BASE_URL}/api/progress/document/${encodeURIComponent(docId)}`);
-        
+
         if (!response.ok) {
             if (response.status === 404) {
                 throw new Error("Document not found");
             }
             throw new Error(`Failed to load progress: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
-        
+
         // Display progress
         const masteryPercent = data.mastery_percent.toFixed(1);
         progressResultElement.textContent = `Progress for "${data.title}": ${masteryPercent}%`;
         progressResultElement.classList.remove("info");
         progressResultElement.classList.add("success");
-        
+
     } catch (error) {
         console.error("Error checking progress:", error);
         progressResultElement.textContent = `Error: ${error.message}`;
         progressResultElement.classList.remove("info");
         progressResultElement.classList.add("error");
+    }
+}
+
+/**
+ * Load and display mastery distribution (cards by mastery level 0-3)
+ */
+async function loadMasteryDistribution(documentId = null) {
+    const masteryContainer = document.getElementById("masteryDistribution");
+
+    if (!masteryContainer) return;
+
+    masteryContainer.innerHTML = "<p class='info'>Loading mastery data...</p>";
+
+    try {
+        const url = documentId
+            ? `${API_BASE_URL}/api/progress/mastery-distribution?document_id=${encodeURIComponent(documentId)}`
+            : `${API_BASE_URL}/api/progress/mastery-distribution`;
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error(`Failed to load mastery data: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        const total = data.total_studied + data.never_seen;
+
+        // Calculate percentages for each level
+        const getPercent = (count) => total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+
+        // Create mastery bars display
+        const html = `
+            <div class="mastery-bars">
+                <div class="mastery-bar-item">
+                    <div class="mastery-bar-header">
+                        <span class="mastery-label">Level 3 - Perfect</span>
+                        <span class="mastery-count">${data.level_3} cards (${getPercent(data.level_3)}%)</span>
+                    </div>
+                    <div class="mastery-bar-track">
+                        <div class="mastery-bar-fill level-3" style="width: ${getPercent(data.level_3)}%"></div>
+                    </div>
+                </div>
+                <div class="mastery-bar-item">
+                    <div class="mastery-bar-header">
+                        <span class="mastery-label">Level 2 - Good</span>
+                        <span class="mastery-count">${data.level_2} cards (${getPercent(data.level_2)}%)</span>
+                    </div>
+                    <div class="mastery-bar-track">
+                        <div class="mastery-bar-fill level-2" style="width: ${getPercent(data.level_2)}%"></div>
+                    </div>
+                </div>
+                <div class="mastery-bar-item">
+                    <div class="mastery-bar-header">
+                        <span class="mastery-label">Level 1 - Barely</span>
+                        <span class="mastery-count">${data.level_1} cards (${getPercent(data.level_1)}%)</span>
+                    </div>
+                    <div class="mastery-bar-track">
+                        <div class="mastery-bar-fill level-1" style="width: ${getPercent(data.level_1)}%"></div>
+                    </div>
+                </div>
+                <div class="mastery-bar-item">
+                    <div class="mastery-bar-header">
+                        <span class="mastery-label">Level 0 - No Idea</span>
+                        <span class="mastery-count">${data.level_0} cards (${getPercent(data.level_0)}%)</span>
+                    </div>
+                    <div class="mastery-bar-track">
+                        <div class="mastery-bar-fill level-0" style="width: ${getPercent(data.level_0)}%"></div>
+                    </div>
+                </div>
+                <div class="mastery-bar-item">
+                    <div class="mastery-bar-header">
+                        <span class="mastery-label">Never Seen</span>
+                        <span class="mastery-count">${data.never_seen} cards (${getPercent(data.never_seen)}%)</span>
+                    </div>
+                    <div class="mastery-bar-track">
+                        <div class="mastery-bar-fill never-seen" style="width: ${getPercent(data.never_seen)}%"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        masteryContainer.innerHTML = html;
+
+    } catch (error) {
+        console.error("Error loading mastery distribution:", error);
+        masteryContainer.innerHTML = `<p class='error'>Error loading mastery data: ${error.message}</p>`;
+    }
+}
+
+/**
+ * Populate document filter dropdown in progress tab
+ */
+async function populateProgressDocumentFilter() {
+    const docSelect = document.getElementById("progressDocFilter");
+    if (!docSelect) return;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/progress/browse`);
+        if (!response.ok) {
+            throw new Error(`Failed to load documents: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Filter out demo/sample documents
+        const isDemo = (title) => {
+            const t = (title || '').toLowerCase();
+            return t.includes('demo') || t.includes('sample') || t.includes('example');
+        };
+
+        const realDocs = (data.documents || []).filter(d => !isDemo(d.title || d.name));
+
+        // Build options
+        const options = ['<option value="">All Documents</option>'];
+        realDocs.forEach(d => {
+            const name = d.title || d.name;
+            const id = d.document_id; // Use document_id from browse endpoint
+            options.push(`<option value="${id}">${escapeHtml(name)}</option>`);
+        });
+
+        docSelect.innerHTML = options.join('');
+    } catch (error) {
+        console.error("Error loading documents for progress filter:", error);
+    }
+}
+
+/**
+ * Refresh all progress statistics based on selected document
+ */
+function refreshProgressStats() {
+    const docSelect = document.getElementById("progressDocFilter");
+    const documentId = docSelect ? docSelect.value : null;
+
+    // Update title based on selection
+    const statsTitle = document.getElementById("statsTitle");
+    if (statsTitle) {
+        if (documentId) {
+            const selectedOption = docSelect.options[docSelect.selectedIndex];
+            const docName = selectedOption ? selectedOption.text : "Document";
+            statsTitle.textContent = `📊 Statistics - ${docName}`;
+        } else {
+            statsTitle.textContent = "📊 Overall Statistics";
+        }
+    }
+
+    // Load stats with document filter
+    loadOverallStats(documentId);
+    loadMasteryDistribution(documentId);
+    loadSpacedRepetitionMetrics(documentId);
+
+    // Show/hide macro topics section (only show when viewing a specific document)
+    const macroTopicsSection = document.getElementById("macroTopicsSection");
+    if (macroTopicsSection) {
+        if (documentId) {
+            macroTopicsSection.style.display = "block";
+            loadMacroTopicsProgress(documentId);
+        } else {
+            macroTopicsSection.style.display = "none";
+        }
+    }
+}
+
+/**
+ * Load and display overall statistics
+ */
+async function loadOverallStats(documentId = null) {
+    const statsContainer = document.getElementById("overallStats");
+
+    if (!statsContainer) return;
+
+    statsContainer.innerHTML = "<p class='info'>Loading statistics...</p>";
+
+    try {
+        const url = documentId
+            ? `${API_BASE_URL}/api/progress/overall?document_id=${encodeURIComponent(documentId)}`
+            : `${API_BASE_URL}/api/progress/overall`;
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error(`Failed to load stats: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Create stats display
+        const html = `
+            <div class="stat-card">
+                <div class="stat-label">Total Cards: <span class="stat-value">${data.total_cards}</span></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Cards Studied: <span class="stat-value">${data.cards_studied}</span></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Never Seen: <span class="stat-value">${data.cards_never_seen}</span></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Progress: <span class="stat-value">${data.percent_studied}%</span></div>
+            </div>
+        `;
+
+        statsContainer.innerHTML = html;
+
+    } catch (error) {
+        console.error("Error loading overall stats:", error);
+        statsContainer.innerHTML = `<p class='error'>Error loading statistics: ${error.message}</p>`;
+    }
+}
+
+/**
+ * Load and display progress for macro topics in a document
+ */
+async function loadMacroTopicsProgress(documentId) {
+    const container = document.getElementById("macroTopicsProgress");
+
+    if (!container || !documentId) return;
+
+    container.innerHTML = "<p class='info'>Loading macro topics...</p>";
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/progress/macro-topics-progress/${encodeURIComponent(documentId)}`);
+
+        if (!response.ok) {
+            throw new Error(`Failed to load macro topics progress: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.macros || data.macros.length === 0) {
+            container.innerHTML = "<p class='info'>No macro topics found for this document.</p>";
+            return;
+        }
+
+        // Create table display
+        let html = `
+            <table class="documents-progress-table">
+                <thead>
+                    <tr>
+                        <th>Macro Topic</th>
+                        <th>Total Cards</th>
+                        <th>Studied</th>
+                        <th>Mastery</th>
+                        <th>Last Studied</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        data.macros.forEach(macro => {
+            const masteryClass = macro.mastery_percent >= 75 ? 'mastery-high' :
+                                macro.mastery_percent >= 40 ? 'mastery-medium' : 'mastery-low';
+
+            const lastStudied = macro.last_studied
+                ? new Date(macro.last_studied).toLocaleDateString()
+                : 'Never';
+
+            html += `
+                <tr class="macro-row">
+                    <td class="doc-title">${escapeHtml(macro.name)}</td>
+                    <td class="text-center">${macro.total_cards}</td>
+                    <td class="text-center">${macro.cards_studied}</td>
+                    <td class="text-center">
+                        <span class="mastery-badge ${masteryClass}">${macro.mastery_percent}%</span>
+                    </td>
+                    <td class="text-center">${lastStudied}</td>
+                </tr>
+            `;
+        });
+
+        html += `
+                </tbody>
+            </table>
+        `;
+
+        container.innerHTML = html;
+
+    } catch (error) {
+        console.error("Error loading macro topics progress:", error);
+        container.innerHTML = `<p class='error'>Error loading macro topics: ${error.message}</p>`;
+    }
+}
+
+/**
+ * Select a document from the progress table
+ */
+function selectDocumentFromTable(documentId) {
+    const docSelect = document.getElementById("progressDocFilter");
+    if (docSelect) {
+        docSelect.value = documentId;
+        refreshProgressStats();
+    }
+}
+
+/**
+ * Load and display spaced repetition metrics
+ */
+async function loadSpacedRepetitionMetrics(documentId = null) {
+    const container = document.getElementById("spacedRepetitionMetrics");
+
+    if (!container) return;
+
+    container.innerHTML = "<p class='info'>Loading schedule...</p>";
+
+    try {
+        const url = documentId
+            ? `${API_BASE_URL}/api/progress/spaced-repetition-metrics?document_id=${encodeURIComponent(documentId)}`
+            : `${API_BASE_URL}/api/progress/spaced-repetition-metrics`;
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error(`Failed to load spaced repetition metrics: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Create spaced repetition cards display
+        const html = `
+            <div class="spaced-rep-grid">
+                <div class="spaced-rep-card due-today">
+                    <div class="rep-icon">📅</div>
+                    <div class="rep-value">${data.cards_due_today}</div>
+                    <div class="rep-label">Due Today</div>
+                    ${data.cards_overdue > 0 ? `<div class="rep-sublabel">${data.cards_overdue} overdue</div>` : ''}
+                </div>
+                <div class="spaced-rep-card due-soon">
+                    <div class="rep-icon">📆</div>
+                    <div class="rep-value">${data.cards_due_soon}</div>
+                    <div class="rep-label">Due Next 7 Days</div>
+                </div>
+                <div class="spaced-rep-card avg-interval">
+                    <div class="rep-icon">⏱️</div>
+                    <div class="rep-value">${data.average_interval}</div>
+                    <div class="rep-label">Avg Interval (days)</div>
+                </div>
+                <div class="spaced-rep-card retention">
+                    <div class="rep-icon">🎯</div>
+                    <div class="rep-value">${data.retention_rate}%</div>
+                    <div class="rep-label">Retention Rate</div>
+                </div>
+            </div>
+            <div class="spaced-rep-explanation">
+                <p><strong>Avg Interval:</strong> The average time between reviews for studied cards. As you master cards, this number increases as the system spaces out reviews (e.g., 1→3→7→14 days).</p>
+                <p><strong>Retention Rate:</strong> The percentage of reviews where you scored "Good" or "Perfect" (grades 2-3). Higher retention means you're successfully remembering the material.</p>
+            </div>
+            <div class="total-reviews-info">
+                <span>📊 Total Reviews Completed: <strong>${data.total_reviews}</strong></span>
+            </div>
+        `;
+
+        container.innerHTML = html;
+
+    } catch (error) {
+        console.error("Error loading spaced repetition metrics:", error);
+        container.innerHTML = `<p class='error'>Error loading schedule: ${error.message}</p>`;
     }
 }
