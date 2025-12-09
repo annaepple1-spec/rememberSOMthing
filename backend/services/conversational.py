@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from backend.models import Document
 from backend.services.rag import retrieve_context, retrieve_context_multi_doc
+from backend.services.security import security_validator, output_validator
 
 # Ensure .env is loaded
 env_path = Path(__file__).parent.parent.parent / ".env"
@@ -80,15 +81,38 @@ def generate_chat_response(
         conversation_history: Optional list of previous messages [{"role": "user"/"assistant", "content": "..."}]
         
     Returns:
-        Dict with keys: response (str), citations (str), context_chunks (list), sources (list)
+        Dict with keys: response (str), citations (str), context_chunks (list), sources (list), security_warning (str)
     """
     if not llm:
         return {
             "response": "I'm sorry, but the AI service is not configured. Please check the OpenAI API key.",
             "citations": "",
             "context_chunks": [],
-            "sources": []
+            "sources": [],
+            "security_warning": None
         }
+    
+    # SECURITY: Validate user input
+    is_valid, error_msg = security_validator.validate_user_input(user_question)
+    if not is_valid:
+        print(f"[SECURITY] Input validation failed: {error_msg}")
+        return {
+            "response": "I can only help with questions about your course material. Please rephrase your question.",
+            "citations": "",
+            "context_chunks": [],
+            "sources": [],
+            "security_warning": error_msg
+        }
+    
+    # SECURITY: Sanitize input
+    user_question = security_validator.sanitize_input(user_question)
+    
+    # SECURITY: Validate conversation history
+    if conversation_history:
+        is_valid, error_msg = security_validator.validate_conversation_history(conversation_history)
+        if not is_valid:
+            print(f"[SECURITY] History validation failed: {error_msg}")
+            conversation_history = []  # Reset history if invalid
     
     # Determine if we're in single-doc or multi-doc mode
     if document_ids and len(document_ids) > 0:
@@ -126,7 +150,8 @@ def generate_chat_response(
             "response": "I couldn't find relevant information in the uploaded documents to answer your question. Please try rephrasing or ask about topics covered in the material.",
             "citations": "",
             "context_chunks": [],
-            "sources": []
+            "sources": [],
+            "security_warning": None
         }
     
     # Build context string with page references
@@ -145,8 +170,8 @@ def generate_chat_response(
             "text": chunk['text'][:200]
         })
     
-    # Build system message with instructions
-    system_message = f"""You are an intelligent study assistant helping students understand course material from {context_description}. 
+    # Build system message with security-enhanced instructions
+    base_system_message = f"""You are an intelligent study assistant helping students understand course material from {context_description}. 
 
 Your role:
 1. Answer questions clearly and accurately based ONLY on the provided course material
@@ -161,6 +186,9 @@ Context from the course material:
 {context_str}
 
 Remember to cite sources whenever you reference specific information!"""
+
+    # SECURITY: Add security instructions to system prompt
+    system_message = security_validator.create_safe_system_prompt(base_system_message)
 
     # Build message history
     messages = [SystemMessage(content=system_message)]
@@ -181,6 +209,12 @@ Remember to cite sources whenever you reference specific information!"""
         response = llm.invoke(messages)
         answer = response.content
         
+        # SECURITY: Validate output for leaked information
+        is_safe, warning = output_validator.validate_output(answer)
+        if not is_safe:
+            print(f"[SECURITY] Output validation warning: {warning}")
+            answer = "I can only help with questions about your course material. Please ask about topics covered in the documents."
+        
         # Format citations (now handles both single and multi-doc)
         citations = format_citations(context_chunks)
         
@@ -188,16 +222,18 @@ Remember to cite sources whenever you reference specific information!"""
             "response": answer,
             "citations": citations,
             "context_chunks": context_chunks,
-            "sources": sources
+            "sources": sources,
+            "security_warning": warning if not is_safe else None
         }
     
     except Exception as e:
         print(f"[CONVERSATIONAL ERROR] Failed to generate response: {e}")
         return {
-            "response": f"I encountered an error while processing your question: {str(e)}",
+            "response": f"I encountered an error while processing your question. Please try again.",
             "citations": "",
             "context_chunks": context_chunks,
-            "sources": sources
+            "sources": sources,
+            "security_warning": None
         }
 
 

@@ -15,6 +15,7 @@ from backend.models import (
 from backend.services.rag import retrieve_context, get_related_cards, assemble_quiz_context
 from backend.services.review import grade_answer_by_type
 from backend.services.conversational import generate_chat_response, generate_follow_up_questions
+from backend.services.security import rate_limiter
 
 router = APIRouter()
 
@@ -96,6 +97,7 @@ class ChatResponse(BaseModel):
     citations: str
     sources: list
     follow_up_questions: Optional[list] = None
+    security_warning: Optional[str] = None
 
 
 @router.post("/quiz/start", response_model=StartQuizResponse)
@@ -368,6 +370,11 @@ async def chat_with_document(request: ChatRequest, db: Session = Depends(get_db)
     if not session:
         raise HTTPException(status_code=404, detail="Quiz session not found")
     
+    # SECURITY: Rate limiting
+    is_allowed, error_msg = rate_limiter.is_allowed(request.session_id)
+    if not is_allowed:
+        raise HTTPException(status_code=429, detail=error_msg)
+    
     # Get document information
     # If document_ids provided, use multi-doc mode; otherwise use session's document_id
     if request.document_ids and len(request.document_ids) > 0:
@@ -414,5 +421,6 @@ async def chat_with_document(request: ChatRequest, db: Session = Depends(get_db)
         response=result['response'],
         citations=result['citations'],
         sources=result['sources'],
-        follow_up_questions=follow_ups
+        follow_up_questions=follow_ups,
+        security_warning=result.get('security_warning')
     )
