@@ -68,7 +68,8 @@ def chunk_text(text: str, chunk_size: int = 512, chunk_overlap: int = 50) -> Lis
 async def create_and_store_chunks(
     document_id: str, 
     text: str, 
-    db: Session
+    db: Session,
+    page_mappings: Optional[List[Dict[str, any]]] = None
 ) -> int:
     """
     Chunk document text, generate embeddings, and store in database + ChromaDB.
@@ -77,6 +78,7 @@ async def create_and_store_chunks(
         document_id: Document ID
         text: Full document text
         db: Database session
+        page_mappings: Optional list of dicts with 'start_char', 'end_char', 'page_number' for tracking source pages
         
     Returns:
         Number of chunks created
@@ -106,25 +108,39 @@ async def create_and_store_chunks(
     chunk_texts = []
     chunk_metadatas = []
     
-    for idx, chunk_text in enumerate(chunks):
+    for idx, chunk_content in enumerate(chunks):
         chunk_id = str(uuid.uuid4())
+        
+        # Determine page number for this chunk based on its position in text
+        page_number = None
+        chunk_start = text.find(chunk_content)
+        
+        if page_mappings and chunk_start >= 0:
+            for mapping in page_mappings:
+                if mapping['start_char'] <= chunk_start < mapping['end_char']:
+                    page_number = mapping['page_number']
+                    break
         
         # Create database record
         chunk_record = DocumentChunk(
             id=chunk_id,
             document_id=document_id,
-            chunk_text=chunk_text,
+            chunk_text=chunk_content,
             chunk_index=idx,
+            page_number=page_number,
+            start_char=chunk_start if chunk_start >= 0 else None,
+            end_char=(chunk_start + len(chunk_content)) if chunk_start >= 0 else None,
             embedding_id=chunk_id
         )
         chunk_records.append(chunk_record)
         
         # Prepare for ChromaDB
         chunk_ids.append(chunk_id)
-        chunk_texts.append(chunk_text)
+        chunk_texts.append(chunk_content)
         chunk_metadatas.append({
             "document_id": document_id,
-            "chunk_index": idx
+            "chunk_index": idx,
+            "page_number": page_number
         })
     
     # Generate embeddings in batch
@@ -159,7 +175,7 @@ def retrieve_context(
         top_k: Number of results to return
         
     Returns:
-        List of dicts with keys: id, text, score, metadata
+        List of dicts with keys: id, text, score, metadata (includes page_number if available)
     """
     try:
         collection = get_or_create_collection(document_id)
@@ -178,11 +194,13 @@ def retrieve_context(
         context_chunks = []
         if results and results['ids'] and len(results['ids']) > 0:
             for i in range(len(results['ids'][0])):
+                metadata = results['metadatas'][0][i] if results['metadatas'] else {}
                 context_chunks.append({
                     "id": results['ids'][0][i],
                     "text": results['documents'][0][i],
                     "score": 1.0 - results['distances'][0][i],  # Convert distance to similarity
-                    "metadata": results['metadatas'][0][i] if results['metadatas'] else {}
+                    "metadata": metadata,
+                    "page_number": metadata.get("page_number")  # Extract page number for easy access
                 })
         
         return context_chunks
@@ -264,3 +282,51 @@ def assemble_quiz_context(
         enriched_question = card.front
     
     return enriched_question, context_chunks
+
+
+def retrieve_context_multi_doc(
+    query: str,
+    document_ids: List[str],
+    db: Session,
+    top_k_per_doc: int = 2
+) -> List[Dict[str, any]]:
+    """
+    Retrieve relevant text chunks from multiple documents using semantic search.
+    
+    Args:
+        query: Search query
+        document_ids: List of document IDs to search across
+        db: Database session
+        top_k_per_doc: Number of results to return per document
+        
+    Returns:
+        List of dicts with keys: id, text, score, metadata, page_number, document_id, document_title
+    """
+    from backend.models import Document
+    
+    all_chunks = []
+    
+    for doc_id in document_ids:
+        try:
+            # Get document info
+            document = db.query(Document).filter(Document.id == doc_id).first()
+            doc_title = document.title if document else f"Document {doc_id}"
+            
+            # Retrieve context for this document
+            chunks = retrieve_context(query, doc_id, top_k=top_k_per_doc)
+            
+            # Add document info to each chunk
+            for chunk in chunks:
+                chunk['document_id'] = doc_id
+                chunk['document_title'] = doc_title
+                all_chunks.append(chunk)
+        
+        except Exception as e:
+            print(f"Error retrieving context from document {doc_id}: {e}")
+            continue
+    
+    # Sort by relevance score
+    all_chunks.sort(key=lambda x: x.get('score', 0), reverse=True)
+    
+    return all_chunks
+

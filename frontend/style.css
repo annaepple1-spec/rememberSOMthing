@@ -1054,21 +1054,26 @@ textarea:focus {
 }
 
 .bulldog-container {
-    height: 80px;
+    height: 120px;
     position: relative;
     overflow: hidden;
     margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .bulldog {
-    font-size: 3rem;
+    width: 100px;
+    height: 100px;
+    object-fit: contain;
     position: absolute;
-    animation: walk 3s linear infinite;
+    animation: walk 3s linear infinite, cycleImages 2s steps(1) infinite;
 }
 
 @keyframes walk {
     0% {
-        left: -60px;
+        left: -120px;
         transform: scaleX(1);
     }
     48% {
@@ -1076,14 +1081,23 @@ textarea:focus {
     }
     50% {
         left: 50%;
-        transform: scaleX(-1);
+        transform: scaleX(-1) translateX(50%);
     }
     98% {
-        transform: scaleX(-1);
+        transform: scaleX(-1) translateX(50%);
     }
     100% {
-        left: calc(100% + 60px);
+        left: calc(100% + 120px);
         transform: scaleX(1);
+    }
+}
+
+@keyframes cycleImages {
+    0%, 49% {
+        content: url('images/handsome-dan-1.png');
+    }
+    50%, 100% {
+        content: url('images/handsome-dan-2.png');
     }
 }
 
@@ -1536,7 +1550,53 @@ textarea:focus {
 .quiz-message-content {
     color: var(--warm-gray-800);
     line-height: 1.6;
-    white-space: pre-wrap;
+}
+
+.quiz-message-content .citation {
+    display: inline-block;
+    background: var(--teal-100);
+    color: var(--teal-700);
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 0.875rem;
+    margin: 0 0.125rem;
+}
+
+.follow-up-questions {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--cream-100);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--teal-500);
+}
+
+.follow-up-questions strong {
+    display: block;
+    margin-bottom: 0.75rem;
+    color: var(--warm-gray-700);
+    font-size: 0.875rem;
+}
+
+.follow-up-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 0.625rem 1rem;
+    margin: 0.5rem 0;
+    background: white;
+    border: 2px solid var(--cream-300);
+    border-radius: var(--radius-md);
+    color: var(--forest-700);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.875rem;
+}
+
+.follow-up-btn:hover {
+    background: var(--pastel-mint);
+    border-color: var(--pastel-mint-text);
+    transform: translateX(4px);
 }
 
 .quiz-context-hint {
@@ -1598,6 +1658,119 @@ textarea:focus {
 .quiz-answer-section textarea:focus {
     outline: none;
     border-color: var(--forest-500);
+}
+
+.quiz-answer-section .chat-buttons {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.voice-button {
+    padding: 0.75rem 1rem;
+    background: var(--pastel-mint);
+    border: 2px solid var(--pastel-mint-text);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 1.25rem;
+    transition: all 0.2s ease;
+}
+
+.voice-button:hover {
+    background: var(--pastel-mint-text);
+    transform: scale(1.05);
+}
+
+.voice-button.recording {
+    background: var(--error-bg);
+    border-color: var(--error-text);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.voice-recording-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--error-bg);
+    border-radius: var(--radius-md);
+    color: var(--error-text);
+    font-weight: 600;
+    margin-top: 0.75rem;
+    animation: fadeIn 0.3s ease;
+}
+
+.recording-pulse {
+    width: 12px;
+    height: 12px;
+    background: var(--error-text);
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+.document-checkbox-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 1rem;
+    background: var(--cream-50);
+    border-radius: var(--radius-md);
+    border: 2px solid var(--cream-300);
+}
+
+.document-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem;
+    background: white;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.document-checkbox:hover {
+    background: var(--pastel-mint);
+}
+
+.document-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.document-checkbox span {
+    flex: 1;
+    font-size: 0.9375rem;
+    color: var(--warm-gray-700);
+}
+
+.document-checkbox.chat-enabled {
+    border-left: 3px solid var(--teal-500);
+}
+
+.document-checkbox.chat-disabled {
+    border-left: 3px solid var(--warning-border);
+    opacity: 0.85;
+}
+
+.document-checkbox.chat-disabled span {
+    color: var(--warning-text);
+}
+
+.document-checkbox.chat-disabled:hover {
+    background: var(--warning-bg);
+}
+
+.document-selector {
+    margin-bottom: 1rem;
 }
 
 .quiz-stats {

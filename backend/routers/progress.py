@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from backend.database import get_db
-from backend.models import Document, Card, MacroTopic, MicroTopic, UserCardState, Review
+from backend.models import Document, Card, MacroTopic, MicroTopic, UserCardState, Review, DocumentChunk
 from backend.services.progress import document_progress, macro_progress, micro_progress
 
 router = APIRouter(prefix="/progress", tags=["progress"])
@@ -484,10 +484,14 @@ def browse_all_cards(db: Session = Depends(get_db), document_id: Optional[str] =
                     "micro_topics": micro_list
                 })
             total_cards = sum(sum(mt["card_count"] for mt in m["micro_topics"]) for m in macro_list if m["micro_topics"])
+            # Check if document has RAG chunks for chatbot
+            chunk_count = db.query(DocumentChunk).filter(DocumentChunk.document_id == doc.id).count()
             result.append({
                 "document_id": doc.id,
                 "title": doc.title,
                 "total_cards": total_cards,
+                "chatbot_enabled": chunk_count > 0,
+                "chunk_count": chunk_count,
                 "macros": macro_list
             })
         else:
@@ -515,10 +519,14 @@ def browse_all_cards(db: Session = Depends(get_db), document_id: Optional[str] =
                     "difficulty": diff_label
                 })
             topics_list = [{"name": name, "cards": lst} for name, lst in topics_map.items()]
+            # Check if document has RAG chunks for chatbot
+            chunk_count = db.query(DocumentChunk).filter(DocumentChunk.document_id == doc.id).count()
             result.append({
                 "document_id": doc.id,
                 "title": doc.title,
                 "total_cards": len(cards),
+                "chatbot_enabled": chunk_count > 0,
+                "chunk_count": chunk_count,
                 "topics": topics_list
             })
 
