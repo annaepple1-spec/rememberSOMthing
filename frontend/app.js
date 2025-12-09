@@ -117,8 +117,18 @@ async function uploadPdf() {
     const handsomeDanImg = document.getElementById("handsomeDan");
     const images = ['images/handsome-dan-1.png', 'images/handsome-dan-2.png'];
     let currentImageIndex = 0;
+    let imageInterval = null;
     
-    const imageInterval = setInterval(() => {
+    // Add error handler for image loading failures
+    handsomeDanImg.onerror = function() {
+        console.warn("Image failed to load, using emoji fallback");
+        // If images don't exist, fall back to emoji
+        this.onerror = null; // Prevent infinite loop
+        this.alt = "🐕";
+        this.style.fontSize = "3rem";
+    };
+    
+    imageInterval = setInterval(() => {
         currentImageIndex = (currentImageIndex + 1) % images.length;
         handsomeDanImg.src = images[currentImageIndex];
     }, 1000); // Switch every 1 second
