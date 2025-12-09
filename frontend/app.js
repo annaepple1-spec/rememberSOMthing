@@ -109,18 +109,38 @@ async function uploadPdf() {
     }
     estimatedTimeEl.textContent = estimatedTime;
 
-    // Show loading animation
+    // Show loading animation with image cycling
     loadingAnimation.style.display = "block";
     statusElement.style.display = "none";
+    
+    // Start cycling between Handsome Dan images
+    const handsomeDanImg = document.getElementById("handsomeDan");
+    const images = ['images/handsome-dan-1.png', 'images/handsome-dan-2.png'];
+    let currentImageIndex = 0;
+    let imageInterval = null;
+    
+    // Add error handler for image loading failures
+    handsomeDanImg.onerror = function() {
+        console.warn("Image failed to load, using emoji fallback");
+        // If images don't exist, fall back to emoji
+        this.onerror = null; // Prevent infinite loop
+        this.alt = "🐕";
+        this.style.fontSize = "3rem";
+    };
+    
+    imageInterval = setInterval(() => {
+        currentImageIndex = (currentImageIndex + 1) % images.length;
+        handsomeDanImg.src = images[currentImageIndex];
+    }, 1000); // Switch every 1 second
 
     try {
         // Create form data
         const formData = new FormData();
         formData.append("file", file);
 
-        // Upload the file with timeout handling
+        // Upload the file with longer timeout for AI flashcard generation
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
+        const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout for AI generation
 
         const response = await fetch(`${API_BASE_URL}/api/upload/pdf`, {
             method: "POST",
@@ -130,7 +150,8 @@ async function uploadPdf() {
 
         clearTimeout(timeoutId);
 
-        // Hide loading animation
+        // Hide loading animation and stop image cycling
+        clearInterval(imageInterval);
         loadingAnimation.style.display = "none";
         statusElement.style.display = "block";
 
@@ -143,16 +164,29 @@ async function uploadPdf() {
         // Store document ID globally
         currentDocumentId = data.document_id;
 
-        // Update the document ID input in the Progress section
-        document.getElementById("docId").value = data.document_id;
+        // Update the document ID input in the Progress section if it exists
+        const docIdInput = document.getElementById("docId");
+        if (docIdInput) {
+            docIdInput.value = data.document_id;
+        }
 
-        // Update study mode indicator
+        // Update study mode indicator if it exists
         const modeIndicator = document.getElementById("studyMode");
-        modeIndicator.textContent = `📖 Ready to study: ${data.title}`;
-        modeIndicator.className = "study-mode-indicator success";
+        if (modeIndicator) {
+            modeIndicator.textContent = `📖 Ready to study: ${data.title}`;
+            modeIndicator.className = "study-mode-indicator success";
+        }
 
-        // Show success message
-        statusElement.textContent = `✓ Uploaded "${data.title}". Document ID: ${data.document_id}. Cards created: ${data.cards_created}.`;
+        // Show success message with chatbot status
+        let message = `✓ Uploaded "${data.title}". Document ID: ${data.document_id}. Cards created: ${data.cards_created}.`;
+        
+        if (!data.chatbot_enabled) {
+            message += `\n\n⚠️ Warning: Study Chat feature not available for this document (RAG indexing failed). Flashcard study mode will work normally.`;
+        } else {
+            message += `\n\n✓ Study Chat enabled (${data.chunks_created} text chunks indexed).`;
+        }
+        
+        statusElement.textContent = message;
         statusElement.classList.add("success");
 
         // Clear file input
@@ -161,11 +195,17 @@ async function uploadPdf() {
     } catch (error) {
         console.error("Upload error:", error);
 
-        // Hide loading animation
+        // Hide loading animation and stop image cycling
+        clearInterval(imageInterval);
         loadingAnimation.style.display = "none";
         statusElement.style.display = "block";
 
-        statusElement.textContent = `Error uploading PDF: ${error.message}`;
+        // Check if it was a timeout/abort error
+        if (error.name === 'AbortError') {
+            statusElement.textContent = `Upload timed out. The AI is taking longer than expected to generate flashcards. Please try a smaller PDF or wait and refresh the page.`;
+        } else {
+            statusElement.textContent = `Error uploading PDF: ${error.message}`;
+        }
         statusElement.classList.add("error");
     }
 }
@@ -1352,13 +1392,18 @@ let currentQuizSessionId = null;
 let currentQuizDocumentId = null;
 let currentQuestionId = null;
 let currentQuizCardId = null;
+let conversationHistory = [];  // Track conversation for context
+let selectedDocumentIds = [];  // Track multiple selected documents
+let recognition = null;  // Speech recognition instance
+let isRecording = false;
 
 /**
  * Populate document filter dropdown in quiz tab
  */
 async function populateQuizDocumentFilter() {
-    const docSelect = document.getElementById("quizDocFilter");
-    if (!docSelect) return;
+    const docList = document.getElementById("quizDocumentList");
+    
+    if (!docList) return;
 
     try {
         const response = await fetch(`${API_BASE_URL}/api/progress/browse`);
@@ -1376,30 +1421,55 @@ async function populateQuizDocumentFilter() {
 
         const realDocs = (data.documents || []).filter(d => !isDemo(d.title || d.name));
 
-        // Build options
-        const options = ['<option value="">Select a document to quiz...</option>'];
-        realDocs.forEach(d => {
+        if (realDocs.length === 0) {
+            docList.innerHTML = '<p style="color: var(--warm-gray-500); font-style: italic;">No documents uploaded yet. Upload a PDF first.</p>';
+            return;
+        }
+
+        // Create checkbox list
+        docList.innerHTML = realDocs.map(d => {
             const name = d.title || d.name;
             const id = d.document_id;
-            options.push(`<option value="${id}">${escapeHtml(name)}</option>`);
-        });
+            const chatEnabled = d.chatbot_enabled || false;
+            const statusIcon = chatEnabled ? '💬' : '⚠️';
+            const statusTitle = chatEnabled ? 
+                `Chat enabled (${d.chunk_count} chunks indexed)` : 
+                'Chat not available - document not indexed properly';
+            const statusClass = chatEnabled ? 'chat-enabled' : 'chat-disabled';
+            
+            return `
+                <label class="document-checkbox ${statusClass}">
+                    <input type="checkbox" value="${id}" onchange="updateSelectedDocuments()">
+                    <span title="${statusTitle}">
+                        ${statusIcon} ${escapeHtml(name)}
+                    </span>
+                </label>
+            `;
+        }).join('');
 
-        docSelect.innerHTML = options.join('');
     } catch (error) {
         console.error("Error loading documents for quiz filter:", error);
+        docList.innerHTML = '<p style="color: var(--error-text);">Error loading documents</p>';
     }
 }
 
 /**
- * Change quiz document selection
+ * Update selected documents array when checkboxes change
  */
-function changeQuizDocument() {
-    const docSelect = document.getElementById("quizDocFilter");
+function updateSelectedDocuments() {
+    const checkboxes = document.querySelectorAll('#quizDocumentList input[type="checkbox"]:checked');
+    selectedDocumentIds = Array.from(checkboxes).map(cb => cb.value);
+    
     const startBtn = document.getElementById("startQuizBtn");
-
-    if (docSelect && startBtn) {
-        currentQuizDocumentId = docSelect.value || null;
-        startBtn.disabled = !currentQuizDocumentId;
+    startBtn.disabled = selectedDocumentIds.length === 0;
+    
+    // Update button text
+    if (selectedDocumentIds.length > 1) {
+        startBtn.textContent = `Start Chat (${selectedDocumentIds.length} documents)`;
+    } else if (selectedDocumentIds.length === 1) {
+        startBtn.textContent = "Start Chat";
+    } else {
+        startBtn.textContent = "Start Chat";
     }
 }
 
@@ -1413,30 +1483,38 @@ async function startQuiz() {
     const endBtn = document.getElementById("endQuizBtn");
     const messagesContainer = document.getElementById("quizMessages");
 
-    if (!currentQuizDocumentId) {
-        statusElement.textContent = "Please select a document first.";
+    if (selectedDocumentIds.length === 0) {
+        statusElement.textContent = "Please select at least one document first.";
         statusElement.className = "status-message error";
         return;
     }
 
     // Clear previous state
-    statusElement.textContent = "Starting quiz...";
+    statusElement.textContent = "Starting chat...";
     statusElement.className = "status-message info";
 
     try {
+        const requestBody = {
+            user_id: "default_user"
+        };
+        
+        // Send either single document_id or multiple document_ids
+        if (selectedDocumentIds.length === 1) {
+            requestBody.document_id = selectedDocumentIds[0];
+        } else {
+            requestBody.document_ids = selectedDocumentIds;
+        }
+
         const response = await fetch(`${API_BASE_URL}/api/quiz/start`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({
-                document_id: currentQuizDocumentId,
-                user_id: "default_user"
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to start quiz: ${response.statusText}`);
+            throw new Error(`Failed to start chat: ${response.statusText}`);
         }
 
         const data = await response.json();
@@ -1451,15 +1529,20 @@ async function startQuiz() {
 
         // Clear messages and reset stats
         messagesContainer.innerHTML = "";
+        conversationHistory = [];  // Reset conversation history
         document.getElementById("quizQuestionsCount").textContent = "0";
+        document.getElementById("quizDocsCount").textContent = selectedDocumentIds.length.toString();
         document.getElementById("quizCorrectCount").textContent = "0";
-        document.getElementById("quizAvgScore").textContent = "0.0";
 
         // Add welcome message
-        addQuizMessage("bot", "Quiz started! Click 'Get Question' to begin.", "Quiz Bot");
+        const docText = selectedDocumentIds.length === 1 ? "this document" : `these ${selectedDocumentIds.length} documents`;
+        addQuizMessage("bot", `Chat started! Ask me anything about ${docText}. I'll provide answers with citations from your course materials.`, "Study Assistant 🤖");
 
-        // Load first question
-        await loadQuizQuestion();
+        // Enable input for chat
+        const answerInput = document.getElementById("quizAnswerInput");
+        answerInput.disabled = false;
+        answerInput.placeholder = "Ask a question about the course material...";
+        answerInput.focus();
 
     } catch (error) {
         console.error("Error starting quiz:", error);
@@ -1469,113 +1552,114 @@ async function startQuiz() {
 }
 
 /**
- * Load next quiz question
+ * Submit quiz answer - now functions as conversational chat
  */
-async function loadQuizQuestion() {
-    if (!currentQuizSessionId) return;
-
+async function submitQuizAnswer() {
     const answerInput = document.getElementById("quizAnswerInput");
+    const userMessage = answerInput.value.trim();
+
+    if (!userMessage) {
+        return;  // Don't submit empty messages
+    }
+
+    if (!currentQuizSessionId) {
+        alert("No active chat session. Please start a quiz first.");
+        return;
+    }
+
+    // Display user message
+    addQuizMessage("user", userMessage, "You");
+
+    // Add to conversation history
+    conversationHistory.push({
+        role: "user",
+        content: userMessage
+    });
+
+    // Clear input and disable while processing
     answerInput.value = "";
     answerInput.disabled = true;
 
     try {
-        const response = await fetch(`${API_BASE_URL}/api/quiz/ask`, {
+        const requestBody = {
+            session_id: currentQuizSessionId,
+            message: userMessage,
+            conversation_history: conversationHistory
+        };
+        
+        // Include document_ids if multiple documents selected
+        if (selectedDocumentIds.length > 0) {
+            requestBody.document_ids = selectedDocumentIds;
+        }
+        
+        const response = await fetch(`${API_BASE_URL}/api/quiz/chat`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({
-                session_id: currentQuizSessionId
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to load question: ${response.statusText}`);
+            throw new Error(`Failed to get response: ${response.statusText}`);
         }
 
         const data = await response.json();
-        currentQuestionId = data.question_id;
-        currentQuizCardId = data.card_id;
 
-        // Display question
-        let questionContent = data.question_text;
-        if (data.context_preview) {
-            questionContent += `\n\n💡 Context hint: ${data.context_preview}`;
+        // Display bot response
+        let responseContent = data.response;
+        
+        // Add citations if available
+        if (data.citations) {
+            responseContent += `\n\n📚 **Sources:**\n${data.citations}`;
+        }
+        
+        addQuizMessage("bot", responseContent, "Study Assistant 🤖");
+
+        // Update sources count
+        if (data.sources && data.sources.length > 0) {
+            document.getElementById("quizCorrectCount").textContent = data.sources.length.toString();
         }
 
-        addQuizMessage("bot", questionContent, `Quiz Bot • ${data.card_type.toUpperCase()}`);
+        // Add assistant response to conversation history
+        conversationHistory.push({
+            role: "assistant",
+            content: data.response
+        });
 
-        // Enable answer input
+        // Display follow-up questions if available
+        if (data.follow_up_questions && data.follow_up_questions.length > 0) {
+            const followUpsDiv = document.createElement("div");
+            followUpsDiv.className = "follow-up-questions";
+            followUpsDiv.innerHTML = "<strong>💡 You might also ask:</strong>";
+            
+            data.follow_up_questions.forEach(question => {
+                const btn = document.createElement("button");
+                btn.className = "follow-up-btn";
+                btn.textContent = question;
+                btn.onclick = () => {
+                    answerInput.value = question;
+                    submitQuizAnswer();
+                };
+                followUpsDiv.appendChild(btn);
+            });
+            
+            const messagesContainer = document.getElementById("quizMessages");
+            messagesContainer.appendChild(followUpsDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // Re-enable input
         answerInput.disabled = false;
         answerInput.focus();
 
-    } catch (error) {
-        console.error("Error loading question:", error);
-        addQuizMessage("bot", `Error loading question: ${error.message}`, "Error");
-    }
-}
-
-/**
- * Submit quiz answer
- */
-async function submitQuizAnswer() {
-    const answerInput = document.getElementById("quizAnswerInput");
-    const answer = answerInput.value.trim();
-
-    if (!answer) {
-        alert("Please enter an answer.");
-        return;
-    }
-
-    if (!currentQuizSessionId || !currentQuestionId) {
-        alert("No active quiz question.");
-        return;
-    }
-
-    // Display user answer
-    addQuizMessage("user", answer, "Your Answer");
-
-    // Disable input while grading
-    answerInput.disabled = true;
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/quiz/answer`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                session_id: currentQuizSessionId,
-                question_id: currentQuestionId,
-                card_id: currentQuizCardId,
-                answer: answer
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to submit answer: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-
-        // Display result
-        const scoreClass = data.score === 3 ? "perfect" : data.score === 2 ? "good" : data.score === 1 ? "partial" : "incorrect";
-        const scoreEmoji = data.score === 3 ? "🎉" : data.score === 2 ? "👍" : data.score === 1 ? "📝" : "❌";
-        
-        const resultContent = `${scoreEmoji} Score: ${data.score}/3\n\n${data.explanation}\n\nCorrect answer: ${data.correct_answer}`;
-        addQuizMessage("result", resultContent, `Result • ${scoreClass}`, scoreClass);
-
-        // Update stats
-        updateQuizStats();
-
-        // Load next question after delay
-        setTimeout(() => {
-            loadQuizQuestion();
-        }, 2000);
+        // Update interaction count
+        const questionsCount = document.getElementById("quizQuestionsCount");
+        questionsCount.textContent = parseInt(questionsCount.textContent) + 1;
 
     } catch (error) {
-        console.error("Error submitting answer:", error);
-        addQuizMessage("bot", `Error grading answer: ${error.message}`, "Error");
+        console.error("Error getting response:", error);
+        addQuizMessage("bot", `Sorry, I encountered an error: ${error.message}`, "Error ❌");
         answerInput.disabled = false;
     }
 }
@@ -1602,7 +1686,15 @@ function addQuizMessage(type, content, header, scoreClass = null) {
     
     const contentDiv = document.createElement("div");
     contentDiv.className = "quiz-message-content";
-    contentDiv.textContent = content;
+    
+    // Convert basic markdown formatting for better readability
+    let formattedContent = content
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')  // Bold
+        .replace(/\n\n/g, '<br><br>')  // Paragraphs
+        .replace(/\n/g, '<br>')  // Line breaks
+        .replace(/\[(\d+)\]/g, '<span class="citation">[$1]</span>');  // Citations
+    
+    contentDiv.innerHTML = formattedContent;
     
     messageDiv.appendChild(headerDiv);
     messageDiv.appendChild(contentDiv);
@@ -1657,13 +1749,111 @@ async function endQuiz() {
             startBtn.style.display = "inline-block";
             endBtn.style.display = "none";
             
-            statusElement.textContent = "Quiz ended. Select a document to start a new quiz.";
+            statusElement.textContent = "Chat ended. Select a document to start a new session.";
             statusElement.className = "status-message info";
 
             currentQuizSessionId = null;
             currentQuestionId = null;
+            conversationHistory = [];  // Reset conversation
+            selectedDocumentIds = [];  // Reset selected documents
         }
     } catch (error) {
         console.error("Error ending quiz:", error);
     }
 }
+
+/**
+ * Voice Input Functions
+ */
+
+/**
+ * Initialize speech recognition
+ */
+function initSpeechRecognition() {
+    // Check browser support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+        console.warn("Speech recognition not supported in this browser");
+        const voiceBtn = document.getElementById("voiceInputBtn");
+        if (voiceBtn) {
+            voiceBtn.style.display = "none";
+        }
+        return null;
+    }
+    
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+    
+    recognition.onstart = () => {
+        isRecording = true;
+        const indicator = document.getElementById("voiceRecordingIndicator");
+        const voiceBtn = document.getElementById("voiceInputBtn");
+        if (indicator) indicator.style.display = "flex";
+        if (voiceBtn) voiceBtn.classList.add("recording");
+    };
+    
+    recognition.onend = () => {
+        isRecording = false;
+        const indicator = document.getElementById("voiceRecordingIndicator");
+        const voiceBtn = document.getElementById("voiceInputBtn");
+        if (indicator) indicator.style.display = "none";
+        if (voiceBtn) voiceBtn.classList.remove("recording");
+    };
+    
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        const answerInput = document.getElementById("quizAnswerInput");
+        if (answerInput) {
+            answerInput.value = transcript;
+            answerInput.focus();
+        }
+    };
+    
+    recognition.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        isRecording = false;
+        const indicator = document.getElementById("voiceRecordingIndicator");
+        const voiceBtn = document.getElementById("voiceInputBtn");
+        if (indicator) indicator.style.display = "none";
+        if (voiceBtn) voiceBtn.classList.remove("recording");
+        
+        if (event.error === 'not-allowed') {
+            alert("Microphone access denied. Please enable microphone permissions in your browser settings.");
+        }
+    };
+    
+    return recognition;
+}
+
+/**
+ * Toggle voice input recording
+ */
+function toggleVoiceInput() {
+    if (!recognition) {
+        recognition = initSpeechRecognition();
+        if (!recognition) {
+            alert("Voice input is not supported in your browser. Please try Chrome or Edge.");
+            return;
+        }
+    }
+    
+    if (isRecording) {
+        // Stop recording
+        recognition.stop();
+    } else {
+        // Start recording
+        const answerInput = document.getElementById("quizAnswerInput");
+        if (answerInput) {
+            answerInput.value = "";  // Clear existing text
+        }
+        recognition.start();
+    }
+}
+
+// Initialize speech recognition on page load
+document.addEventListener('DOMContentLoaded', () => {
+    initSpeechRecognition();
+});

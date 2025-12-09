@@ -17,7 +17,7 @@
         <div class="tab-navigation">
             <button class="tab-button active" onclick="switchTab('upload')">📤 Upload</button>
             <button class="tab-button" onclick="switchTab('study')">📖 Study</button>
-            <button class="tab-button" onclick="switchTab('quiz')">💬 Quiz Bot</button>
+            <button class="tab-button" onclick="switchTab('quiz')">💬 Study Chat</button>
             <button class="tab-button" onclick="switchTab('browse')">📚 Browse Cards</button>
             <button class="tab-button" onclick="switchTab('progress')">📊 Progress</button>
         </div>
@@ -39,7 +39,7 @@
                 <div id="loadingAnimation" class="loading-container" style="display: none;">
                     <div class="loading-content">
                         <div class="bulldog-container">
-                            <div class="bulldog">🐕</div>
+                            <img src="images/handsome-dan-1.png" alt="Handsome Dan" class="bulldog" id="handsomeDan">
                         </div>
                         <p class="loading-text">AI is analyzing your document...</p>
                         <p class="loading-time">Estimated time: <span id="estimatedTime">1-2 minutes</span></p>
@@ -119,16 +119,21 @@
 
             <!-- Quiz Bot Tab -->
             <div id="quiz-tab" class="tab-panel">
-                <h2>💬 Quiz Bot</h2>
-                <p class="tab-description">Practice with an AI quiz bot that asks questions from your documents using RAG.</p>
+                <h2>💬 Study Assistant Chatbot</h2>
+                <p class="tab-description">Ask questions about your course material and get intelligent answers with citations using GPT-4 and RAG.</p>
 
                 <!-- Document Selection -->
                 <div class="quiz-controls">
-                    <select id="quizDocFilter" onchange="changeQuizDocument()">
-                        <option value="">Select a document to quiz...</option>
-                    </select>
-                    <button id="startQuizBtn" onclick="startQuiz()" class="primary-button" disabled>Start Quiz</button>
-                    <button id="endQuizBtn" onclick="endQuiz()" class="secondary-button" style="display:none">End Quiz</button>
+                    <div class="document-selector">
+                        <label style="font-weight: 600; margin-bottom: 0.5rem; display: block;">Select documents to chat about:</label>
+                        <div id="quizDocumentList" class="document-checkbox-list">
+                            <!-- Checkboxes will be populated here -->
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                        <button id="startQuizBtn" onclick="startQuiz()" class="primary-button" disabled>Start Chat</button>
+                        <button id="endQuizBtn" onclick="endQuiz()" class="secondary-button" style="display:none">End Chat</button>
+                    </div>
                 </div>
 
                 <p id="quizStatus" class="status-message"></p>
@@ -138,17 +143,28 @@
                     <!-- Chat Messages -->
                     <div id="quizMessages" class="quiz-messages"></div>
 
-                    <!-- Answer Input -->
+                    <!-- Answer Input with Voice -->
                     <div id="quizAnswerSection" class="quiz-answer-section">
-                        <textarea id="quizAnswerInput" rows="3" placeholder="Type your answer here..."></textarea>
-                        <button onclick="submitQuizAnswer()" class="primary-button">Submit Answer</button>
+                        <textarea id="quizAnswerInput" rows="2" placeholder="Ask a question about the course material..." onkeypress="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); submitQuizAnswer();}"></textarea>
+                        <div class="chat-buttons">
+                            <button id="voiceInputBtn" onclick="toggleVoiceInput()" class="voice-button" title="Voice input">
+                                🎤
+                            </button>
+                            <button onclick="submitQuizAnswer()" class="primary-button">Send</button>
+                        </div>
+                    </div>
+
+                    <!-- Voice Recording Indicator -->
+                    <div id="voiceRecordingIndicator" class="voice-recording-indicator" style="display: none;">
+                        <span class="recording-pulse"></span>
+                        <span>Listening...</span>
                     </div>
 
                     <!-- Quiz Stats -->
                     <div id="quizStats" class="quiz-stats">
-                        <span>Questions: <strong id="quizQuestionsCount">0</strong></span>
-                        <span>Correct: <strong id="quizCorrectCount">0</strong></span>
-                        <span>Average Score: <strong id="quizAvgScore">0.0</strong></span>
+                        <span>Messages: <strong id="quizQuestionsCount">0</strong></span>
+                        <span>Documents: <strong id="quizDocsCount">0</strong></span>
+                        <span>Sources Used: <strong id="quizCorrectCount">0</strong></span>
                     </div>
                 </div>
             </div>

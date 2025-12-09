@@ -74,7 +74,7 @@ def upload_pdf(file: UploadFile = File(...), db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Please upload a PDF file")
 
     try:
-        document, cards_created = process_pdf(file, db)
+        document, cards_created, chunks_created, rag_success = process_pdf(file, db)
 
         # Clean up old documents after successful upload
         cleanup_old_documents(db, max_documents=5)
@@ -82,7 +82,9 @@ def upload_pdf(file: UploadFile = File(...), db: Session = Depends(get_db)):
         return {
             "document_id": document.id,
             "title": document.title,
-            "cards_created": cards_created
+            "cards_created": cards_created,
+            "chatbot_enabled": rag_success,
+            "chunks_created": chunks_created
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -468,10 +468,24 @@ def process_pdf(file: UploadFile, db: Session) -> tuple[Document, int]:
         raise ValueError(f"Invalid PDF file: {str(e)}")
 
     full_text = ""
+    page_mappings = []  # Track character positions for each page
+    current_position = 0
+    
     try:
         for page_num in range(pdf_document.page_count):
             page = pdf_document[page_num]
-            full_text += page.get_text()
+            page_text = page.get_text()
+            page_start = current_position
+            page_end = current_position + len(page_text)
+            
+            page_mappings.append({
+                'page_number': page_num + 1,  # 1-indexed for user display
+                'start_char': page_start,
+                'end_char': page_end
+            })
+            
+            full_text += page_text
+            current_position = page_end
     finally:
         pdf_document.close()
 
@@ -504,20 +518,23 @@ def process_pdf(file: UploadFile, db: Session) -> tuple[Document, int]:
 
     # Create text chunks and embeddings for RAG (Quiz Bot feature)
     chunks_created = 0
+    rag_success = False
     try:
         from backend.services.rag import create_and_store_chunks
         import asyncio
         
         print(f"[INGEST] Creating text chunks for RAG...")
         # Run async function in sync context
-        chunks_created = asyncio.run(create_and_store_chunks(doc_id, full_text, db))
+        chunks_created = asyncio.run(create_and_store_chunks(doc_id, full_text, db, page_mappings))
         print(f"[INGEST] Created {chunks_created} chunks for document {doc_id}")
+        rag_success = chunks_created > 0
     except Exception as e:
         print(f"[INGEST] Failed to create chunks: {e}")
         import traceback
         traceback.print_exc()
+        rag_success = False
 
     db.commit()
     db.refresh(document)
 
-    return document, cards_created
+    return document, cards_created, chunks_created, rag_success

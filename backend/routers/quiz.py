@@ -10,17 +10,36 @@ from pydantic import BaseModel
 
 from backend.database import get_db
 from backend.models import (
-    QuizSession, QuizInteraction, Card, Document, UserCardState, Review
+    QuizSession, QuizInteraction, Card, Document, UserCardState, Review, DocumentChunk
 )
 from backend.services.rag import retrieve_context, get_related_cards, assemble_quiz_context
 from backend.services.review import grade_answer_by_type
+from backend.services.conversational import generate_chat_response, generate_follow_up_questions
+from backend.services.security import rate_limiter
 
 router = APIRouter()
 
 
+def check_documents_have_chunks(db: Session, document_ids: list) -> tuple[bool, list]:
+    """
+    Check if documents have RAG chunks for chatbot functionality.
+    
+    Returns:
+        (all_have_chunks: bool, docs_without_chunks: list of doc IDs)
+    """
+    docs_without_chunks = []
+    for doc_id in document_ids:
+        chunk_count = db.query(DocumentChunk).filter(DocumentChunk.document_id == doc_id).count()
+        if chunk_count == 0:
+            docs_without_chunks.append(doc_id)
+    
+    return len(docs_without_chunks) == 0, docs_without_chunks
+
+
 # Request/Response schemas
 class StartQuizRequest(BaseModel):
-    document_id: str
+    document_id: str = None  # Single document (optional for backward compatibility)
+    document_ids: list = None  # Multiple documents (new multi-doc mode)
     user_id: str = "default_user"
 
 
@@ -66,26 +85,86 @@ class QuizHistoryResponse(BaseModel):
     interactions: list
 
 
+class ChatRequest(BaseModel):
+    session_id: str
+    message: str
+    document_ids: Optional[list] = None  # For multi-doc mode
+    conversation_history: Optional[list] = None  # List of {"role": "user"/"assistant", "content": "..."}
+
+
+class ChatResponse(BaseModel):
+    response: str
+    citations: str
+    sources: list
+    follow_up_questions: Optional[list] = None
+    security_warning: Optional[str] = None
+
+
 @router.post("/quiz/start", response_model=StartQuizResponse)
 async def start_quiz(request: StartQuizRequest, db: Session = Depends(get_db)):
-    """Start a new quiz session for a document."""
+    """Start a new quiz session for one or more documents."""
     
-    # Verify document exists
-    document = db.query(Document).filter(Document.id == request.document_id).first()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+    # Determine if single or multi-doc mode
+    if request.document_ids and len(request.document_ids) > 0:
+        # Multi-document mode
+        document_ids = request.document_ids
+        documents = db.query(Document).filter(Document.id.in_(document_ids)).all()
+        
+        if not documents:
+            raise HTTPException(status_code=404, detail="No documents found")
+        
+        doc_titles = [doc.title for doc in documents]
+        primary_doc_id = document_ids[0]  # Use first document as primary for session
+        document_title = f"{len(documents)} documents: " + ", ".join(doc_titles[:3]) + ("..." if len(doc_titles) > 3 else "")
+        
+        # Check if there are cards across all documents
+        total_cards = db.query(Card).filter(Card.document_id.in_(document_ids)).count()
+        if total_cards == 0:
+            raise HTTPException(status_code=400, detail="No flashcards found for selected documents")
+        
+        # Check if documents have RAG chunks for chatbot
+        has_chunks, docs_without = check_documents_have_chunks(db, document_ids)
+        if not has_chunks:
+            doc_titles_missing = [db.query(Document).filter(Document.id == doc_id).first().title 
+                                  for doc_id in docs_without if db.query(Document).filter(Document.id == doc_id).first()]
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Study Chat not available. The following documents weren't properly indexed for chat: {', '.join(doc_titles_missing)}. Please re-upload these documents or use the Practice tab for flashcard study."
+            )
+    else:
+        # Single document mode (backward compatibility)
+        if not request.document_id:
+            raise HTTPException(status_code=400, detail="No document specified")
+        
+        document = db.query(Document).filter(Document.id == request.document_id).first()
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        primary_doc_id = request.document_id
+        document_ids = [request.document_id]
+        document_title = document.title
+        
+        # Check if there are cards for this document
+        card_count = db.query(Card).filter(Card.document_id == request.document_id).count()
+        if card_count == 0:
+            raise HTTPException(status_code=400, detail="No flashcards found for this document")
+        
+        # Check if document has RAG chunks for chatbot
+        has_chunks, _ = check_documents_have_chunks(db, [request.document_id])
+        if not has_chunks:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Study Chat not available for '{document.title}'. This document wasn't properly indexed for chat. Please re-upload or use the Practice tab for flashcard study."
+            )
+        
+        total_cards = card_count
     
-    # Check if there are cards for this document
-    card_count = db.query(Card).filter(Card.document_id == request.document_id).count()
-    if card_count == 0:
-        raise HTTPException(status_code=400, detail="No flashcards found for this document")
-    
-    # Create quiz session
+    # Create quiz session (store document_ids in session for later use)
     session_id = str(uuid.uuid4())
     quiz_session = QuizSession(
         id=session_id,
         user_id=request.user_id,
-        document_id=request.document_id,
+        document_id=primary_doc_id,  # Store primary doc for compatibility
         started_at=datetime.utcnow(),
         last_activity_at=datetime.utcnow()
     )
@@ -93,10 +172,13 @@ async def start_quiz(request: StartQuizRequest, db: Session = Depends(get_db)):
     db.add(quiz_session)
     db.commit()
     
+    # Store document_ids list in a separate way (you might want to add a new field or use JSON)
+    # For now, we'll pass it in the response and frontend will track it
+    
     return StartQuizResponse(
         session_id=session_id,
-        document_title=document.title,
-        message=f"Quiz started! Ready to practice with {card_count} flashcards."
+        document_title=document_title,
+        message=f"Chat started! Ready to answer questions from {total_cards} flashcards across your selected documents."
     )
 
 
@@ -274,3 +356,71 @@ async def end_quiz(session_id: str, db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": "Quiz session ended", "session_id": session_id}
+
+
+@router.post("/quiz/chat", response_model=ChatResponse)
+async def chat_with_document(request: ChatRequest, db: Session = Depends(get_db)):
+    """
+    Conversational chat endpoint using RAG to answer questions from uploaded documents.
+    Provides intelligent responses with citations from course material.
+    Supports both single and multi-document mode.
+    """
+    # Verify session exists
+    session = db.query(QuizSession).filter(QuizSession.id == request.session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Quiz session not found")
+    
+    # SECURITY: Rate limiting
+    is_allowed, error_msg = rate_limiter.is_allowed(request.session_id)
+    if not is_allowed:
+        raise HTTPException(status_code=429, detail=error_msg)
+    
+    # Get document information
+    # If document_ids provided, use multi-doc mode; otherwise use session's document_id
+    if request.document_ids and len(request.document_ids) > 0:
+        # Multi-document mode
+        documents = db.query(Document).filter(Document.id.in_(request.document_ids)).all()
+        if not documents:
+            raise HTTPException(status_code=404, detail="Documents not found")
+        
+        result = generate_chat_response(
+            user_question=request.message,
+            document_ids=request.document_ids,
+            db=db,
+            conversation_history=request.conversation_history
+        )
+    else:
+        # Single document mode
+        document = db.query(Document).filter(Document.id == session.document_id).first()
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        result = generate_chat_response(
+            user_question=request.message,
+            document_id=session.document_id,
+            document_title=document.title,
+            db=db,
+            conversation_history=request.conversation_history
+        )
+    
+    # Generate follow-up questions
+    # Use first document for follow-ups
+    doc_id = request.document_ids[0] if request.document_ids else session.document_id
+    follow_ups = generate_follow_up_questions(
+        user_question=request.message,
+        response=result['response'],
+        document_id=doc_id,
+        db=db
+    )
+    
+    # Update session activity
+    session.last_activity_at = datetime.utcnow()
+    db.commit()
+    
+    return ChatResponse(
+        response=result['response'],
+        citations=result['citations'],
+        sources=result['sources'],
+        follow_up_questions=follow_ups,
+        security_warning=result.get('security_warning')
+    )
