@@ -236,7 +236,10 @@ rm -rf chroma_db/
 
 ## 📧 Contact
 
-**Project Maintainer**: [@annaepple1-spec](https://github.com/annaepple1-spec)
+**Project Maintainers**: 
+- [@annaepple1-spec](https://github.com/annaepple1-spec)
+- [@Kenza-R](https://github.com/Kenza-R)
+- [@maxjobraun](https://github.com/maxjobraun)
 
 **Repository**: [github.com/annaepple1-spec/rememberSOMthing](https://github.com/annaepple1-spec/rememberSOMthing)
 
