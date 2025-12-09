@@ -58,6 +58,11 @@ function switchTab(tabName) {
     if (tabName === 'study') {
         populateStudyDocumentFilter();
     }
+
+    // Auto-load content for quiz tab
+    if (tabName === 'quiz') {
+        populateQuizDocumentFilter();
+    }
 }
 
 /**
@@ -469,6 +474,49 @@ async function submitAnswerGeneric(userAnswer) {
             feedbackElement.classList.add("warning");
         } else {
             feedbackElement.classList.add("error");
+        }
+
+        // After answer is submitted and graded, update UI to show next card option
+        // Hide the answer input sections
+        const textAnswerSection = document.getElementById("textAnswerSection");
+        const mcqOptions = document.getElementById("mcqOptions");
+        const selfGradeSection = document.getElementById("selfGradeSection");
+        
+        if (textAnswerSection) textAnswerSection.style.display = 'none';
+        if (mcqOptions) mcqOptions.style.display = 'none';
+        if (selfGradeSection) selfGradeSection.style.display = 'none';
+
+        // Show the correct answer
+        const studyAnswerEl = document.getElementById("studyAnswer");
+        if (studyAnswerEl && currentCardData) {
+            const answerLabel = document.createElement('div');
+            answerLabel.style.fontWeight = '600';
+            answerLabel.style.color = 'var(--primary-color)';
+            answerLabel.style.marginBottom = '0.5rem';
+            answerLabel.style.textTransform = 'uppercase';
+            answerLabel.style.letterSpacing = '0.05em';
+            answerLabel.textContent = '✓ Correct Answer';
+
+            studyAnswerEl.innerHTML = '';
+            studyAnswerEl.appendChild(answerLabel);
+
+            // Add answer text
+            const answerText = document.createElement('div');
+            answerText.textContent = currentCardData.back || '';
+            studyAnswerEl.appendChild(answerText);
+
+            studyAnswerEl.style.display = 'block';
+        }
+
+        // Hide reveal button, show Next Card button
+        const revealButton = document.getElementById("revealButton");
+        if (revealButton) {
+            revealButton.style.display = 'none';
+        }
+
+        const nextCardButton = document.querySelector('.study-controls .primary-button');
+        if (nextCardButton) {
+            nextCardButton.style.display = 'inline-block';
         }
 
     } catch (error) {
@@ -1292,5 +1340,330 @@ async function loadSpacedRepetitionMetrics(documentId = null) {
     } catch (error) {
         console.error("Error loading spaced repetition metrics:", error);
         container.innerHTML = `<p class='error'>Error loading schedule: ${error.message}</p>`;
+    }
+}
+
+/**
+ * Quiz Bot Functions
+ */
+
+// Global quiz state
+let currentQuizSessionId = null;
+let currentQuizDocumentId = null;
+let currentQuestionId = null;
+let currentQuizCardId = null;
+
+/**
+ * Populate document filter dropdown in quiz tab
+ */
+async function populateQuizDocumentFilter() {
+    const docSelect = document.getElementById("quizDocFilter");
+    if (!docSelect) return;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/progress/browse`);
+        if (!response.ok) {
+            throw new Error(`Failed to load documents: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Filter out demo/sample documents
+        const isDemo = (title) => {
+            const t = (title || '').toLowerCase();
+            return t.includes('demo') || t.includes('sample') || t.includes('example');
+        };
+
+        const realDocs = (data.documents || []).filter(d => !isDemo(d.title || d.name));
+
+        // Build options
+        const options = ['<option value="">Select a document to quiz...</option>'];
+        realDocs.forEach(d => {
+            const name = d.title || d.name;
+            const id = d.document_id;
+            options.push(`<option value="${id}">${escapeHtml(name)}</option>`);
+        });
+
+        docSelect.innerHTML = options.join('');
+    } catch (error) {
+        console.error("Error loading documents for quiz filter:", error);
+    }
+}
+
+/**
+ * Change quiz document selection
+ */
+function changeQuizDocument() {
+    const docSelect = document.getElementById("quizDocFilter");
+    const startBtn = document.getElementById("startQuizBtn");
+
+    if (docSelect && startBtn) {
+        currentQuizDocumentId = docSelect.value || null;
+        startBtn.disabled = !currentQuizDocumentId;
+    }
+}
+
+/**
+ * Start a new quiz session
+ */
+async function startQuiz() {
+    const statusElement = document.getElementById("quizStatus");
+    const chatContainer = document.getElementById("quizChatContainer");
+    const startBtn = document.getElementById("startQuizBtn");
+    const endBtn = document.getElementById("endQuizBtn");
+    const messagesContainer = document.getElementById("quizMessages");
+
+    if (!currentQuizDocumentId) {
+        statusElement.textContent = "Please select a document first.";
+        statusElement.className = "status-message error";
+        return;
+    }
+
+    // Clear previous state
+    statusElement.textContent = "Starting quiz...";
+    statusElement.className = "status-message info";
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/quiz/start`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                document_id: currentQuizDocumentId,
+                user_id: "default_user"
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to start quiz: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        currentQuizSessionId = data.session_id;
+
+        // Update UI
+        statusElement.textContent = data.message;
+        statusElement.className = "status-message success";
+        chatContainer.style.display = "block";
+        startBtn.style.display = "none";
+        endBtn.style.display = "inline-block";
+
+        // Clear messages and reset stats
+        messagesContainer.innerHTML = "";
+        document.getElementById("quizQuestionsCount").textContent = "0";
+        document.getElementById("quizCorrectCount").textContent = "0";
+        document.getElementById("quizAvgScore").textContent = "0.0";
+
+        // Add welcome message
+        addQuizMessage("bot", "Quiz started! Click 'Get Question' to begin.", "Quiz Bot");
+
+        // Load first question
+        await loadQuizQuestion();
+
+    } catch (error) {
+        console.error("Error starting quiz:", error);
+        statusElement.textContent = `Error: ${error.message}`;
+        statusElement.className = "status-message error";
+    }
+}
+
+/**
+ * Load next quiz question
+ */
+async function loadQuizQuestion() {
+    if (!currentQuizSessionId) return;
+
+    const answerInput = document.getElementById("quizAnswerInput");
+    answerInput.value = "";
+    answerInput.disabled = true;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/quiz/ask`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                session_id: currentQuizSessionId
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to load question: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        currentQuestionId = data.question_id;
+        currentQuizCardId = data.card_id;
+
+        // Display question
+        let questionContent = data.question_text;
+        if (data.context_preview) {
+            questionContent += `\n\n💡 Context hint: ${data.context_preview}`;
+        }
+
+        addQuizMessage("bot", questionContent, `Quiz Bot • ${data.card_type.toUpperCase()}`);
+
+        // Enable answer input
+        answerInput.disabled = false;
+        answerInput.focus();
+
+    } catch (error) {
+        console.error("Error loading question:", error);
+        addQuizMessage("bot", `Error loading question: ${error.message}`, "Error");
+    }
+}
+
+/**
+ * Submit quiz answer
+ */
+async function submitQuizAnswer() {
+    const answerInput = document.getElementById("quizAnswerInput");
+    const answer = answerInput.value.trim();
+
+    if (!answer) {
+        alert("Please enter an answer.");
+        return;
+    }
+
+    if (!currentQuizSessionId || !currentQuestionId) {
+        alert("No active quiz question.");
+        return;
+    }
+
+    // Display user answer
+    addQuizMessage("user", answer, "Your Answer");
+
+    // Disable input while grading
+    answerInput.disabled = true;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/quiz/answer`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                session_id: currentQuizSessionId,
+                question_id: currentQuestionId,
+                card_id: currentQuizCardId,
+                answer: answer
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to submit answer: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Display result
+        const scoreClass = data.score === 3 ? "perfect" : data.score === 2 ? "good" : data.score === 1 ? "partial" : "incorrect";
+        const scoreEmoji = data.score === 3 ? "🎉" : data.score === 2 ? "👍" : data.score === 1 ? "📝" : "❌";
+        
+        const resultContent = `${scoreEmoji} Score: ${data.score}/3\n\n${data.explanation}\n\nCorrect answer: ${data.correct_answer}`;
+        addQuizMessage("result", resultContent, `Result • ${scoreClass}`, scoreClass);
+
+        // Update stats
+        updateQuizStats();
+
+        // Load next question after delay
+        setTimeout(() => {
+            loadQuizQuestion();
+        }, 2000);
+
+    } catch (error) {
+        console.error("Error submitting answer:", error);
+        addQuizMessage("bot", `Error grading answer: ${error.message}`, "Error");
+        answerInput.disabled = false;
+    }
+}
+
+/**
+ * Add message to quiz chat
+ */
+function addQuizMessage(type, content, header, scoreClass = null) {
+    const messagesContainer = document.getElementById("quizMessages");
+    
+    const messageDiv = document.createElement("div");
+    messageDiv.className = `quiz-message ${type}`;
+    
+    const headerDiv = document.createElement("div");
+    headerDiv.className = "quiz-message-header";
+    headerDiv.innerHTML = `<span>${header}</span>`;
+    
+    if (scoreClass) {
+        const badge = document.createElement("span");
+        badge.className = `quiz-score-badge ${scoreClass}`;
+        badge.textContent = scoreClass.toUpperCase();
+        headerDiv.appendChild(badge);
+    }
+    
+    const contentDiv = document.createElement("div");
+    contentDiv.className = "quiz-message-content";
+    contentDiv.textContent = content;
+    
+    messageDiv.appendChild(headerDiv);
+    messageDiv.appendChild(contentDiv);
+    messagesContainer.appendChild(messageDiv);
+    
+    // Scroll to bottom
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+/**
+ * Update quiz statistics display
+ */
+async function updateQuizStats() {
+    if (!currentQuizSessionId) return;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/quiz/history/${currentQuizSessionId}`);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to load stats: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        document.getElementById("quizQuestionsCount").textContent = data.questions_asked;
+        document.getElementById("quizCorrectCount").textContent = data.questions_correct;
+        document.getElementById("quizAvgScore").textContent = data.average_score.toFixed(1);
+
+    } catch (error) {
+        console.error("Error updating quiz stats:", error);
+    }
+}
+
+/**
+ * End quiz session
+ */
+async function endQuiz() {
+    if (!currentQuizSessionId) return;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/quiz/end/${currentQuizSessionId}`, {
+            method: "POST"
+        });
+
+        if (response.ok) {
+            const chatContainer = document.getElementById("quizChatContainer");
+            const startBtn = document.getElementById("startQuizBtn");
+            const endBtn = document.getElementById("endQuizBtn");
+            const statusElement = document.getElementById("quizStatus");
+
+            chatContainer.style.display = "none";
+            startBtn.style.display = "inline-block";
+            endBtn.style.display = "none";
+            
+            statusElement.textContent = "Quiz ended. Select a document to start a new quiz.";
+            statusElement.className = "status-message info";
+
+            currentQuizSessionId = null;
+            currentQuestionId = null;
+        }
+    } catch (error) {
+        console.error("Error ending quiz:", error);
     }
 }

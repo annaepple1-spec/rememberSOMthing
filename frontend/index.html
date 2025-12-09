@@ -17,6 +17,7 @@
         <div class="tab-navigation">
             <button class="tab-button active" onclick="switchTab('upload')">📤 Upload</button>
             <button class="tab-button" onclick="switchTab('study')">📖 Study</button>
+            <button class="tab-button" onclick="switchTab('quiz')">💬 Quiz Bot</button>
             <button class="tab-button" onclick="switchTab('browse')">📚 Browse Cards</button>
             <button class="tab-button" onclick="switchTab('progress')">📊 Progress</button>
         </div>
@@ -114,6 +115,42 @@
                 </div>
 
                 <div id="feedback" class="feedback"></div>
+            </div>
+
+            <!-- Quiz Bot Tab -->
+            <div id="quiz-tab" class="tab-panel">
+                <h2>💬 Quiz Bot</h2>
+                <p class="tab-description">Practice with an AI quiz bot that asks questions from your documents using RAG.</p>
+
+                <!-- Document Selection -->
+                <div class="quiz-controls">
+                    <select id="quizDocFilter" onchange="changeQuizDocument()">
+                        <option value="">Select a document to quiz...</option>
+                    </select>
+                    <button id="startQuizBtn" onclick="startQuiz()" class="primary-button" disabled>Start Quiz</button>
+                    <button id="endQuizBtn" onclick="endQuiz()" class="secondary-button" style="display:none">End Quiz</button>
+                </div>
+
+                <p id="quizStatus" class="status-message"></p>
+
+                <!-- Chat Container -->
+                <div id="quizChatContainer" class="quiz-chat-container" style="display:none">
+                    <!-- Chat Messages -->
+                    <div id="quizMessages" class="quiz-messages"></div>
+
+                    <!-- Answer Input -->
+                    <div id="quizAnswerSection" class="quiz-answer-section">
+                        <textarea id="quizAnswerInput" rows="3" placeholder="Type your answer here..."></textarea>
+                        <button onclick="submitQuizAnswer()" class="primary-button">Submit Answer</button>
+                    </div>
+
+                    <!-- Quiz Stats -->
+                    <div id="quizStats" class="quiz-stats">
+                        <span>Questions: <strong id="quizQuestionsCount">0</strong></span>
+                        <span>Correct: <strong id="quizCorrectCount">0</strong></span>
+                        <span>Average Score: <strong id="quizAvgScore">0.0</strong></span>
+                    </div>
+                </div>
             </div>
 
             <!-- Browse Cards Tab -->

@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from backend.database import init_db
-from backend.routers import session, upload, progress
+from backend.routers import session, upload, progress, quiz
 
 # Load environment variables from .env file
 env_path = Path(__file__).parent.parent / ".env"
@@ -27,6 +27,7 @@ app.add_middleware(
 app.include_router(session.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
 app.include_router(progress.router, prefix="/api")
+app.include_router(quiz.router, prefix="/api")
 
 # Mount static files for frontend at root
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

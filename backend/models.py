@@ -123,3 +123,50 @@ class UserTopicState(Base):
     last_practice_at = Column(DateTime, nullable=True)
     total_reviews = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class DocumentChunk(Base):
+    """Text chunk from document with embedding for RAG retrieval."""
+    __tablename__ = "document_chunks"
+
+    id = Column(String, primary_key=True)
+    document_id = Column(String, ForeignKey("documents.id"), nullable=False)
+    chunk_text = Column(Text, nullable=False)
+    chunk_index = Column(Integer, nullable=False)  # Order in document
+    page_number = Column(Integer, nullable=True)  # Source page if available
+    start_char = Column(Integer, nullable=True)  # Character offset in document
+    end_char = Column(Integer, nullable=True)
+    # Embedding stored as JSON string (will use ChromaDB for vector ops)
+    embedding_id = Column(String, nullable=True)  # Reference to ChromaDB
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class QuizSession(Base):
+    """Quiz session tracking for RAG-based interactive quizzing."""
+    __tablename__ = "quiz_sessions"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False)
+    document_id = Column(String, ForeignKey("documents.id"), nullable=False)
+    started_at = Column(DateTime, default=datetime.utcnow)
+    last_activity_at = Column(DateTime, default=datetime.utcnow)
+    questions_asked = Column(Integer, default=0)
+    questions_correct = Column(Integer, default=0)
+    total_score = Column(Float, default=0.0)  # Sum of scores (0-3 per question)
+    is_active = Column(Integer, default=1)  # 1=active, 0=ended
+
+
+class QuizInteraction(Base):
+    """Individual question/answer interaction in a quiz session."""
+    __tablename__ = "quiz_interactions"
+
+    id = Column(String, primary_key=True)
+    session_id = Column(String, ForeignKey("quiz_sessions.id"), nullable=False)
+    card_id = Column(String, ForeignKey("cards.id"), nullable=True)  # Linked card if using existing
+    question_text = Column(Text, nullable=False)
+    user_answer = Column(Text, nullable=False)
+    correct_answer = Column(Text, nullable=False)
+    score = Column(Integer, nullable=False)  # 0-3
+    explanation = Column(Text, nullable=True)  # Grading explanation
+    retrieved_context = Column(Text, nullable=True)  # RAG context used
+    timestamp = Column(DateTime, default=datetime.utcnow)

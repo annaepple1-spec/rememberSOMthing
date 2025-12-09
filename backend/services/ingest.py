@@ -502,6 +502,21 @@ def process_pdf(file: UploadFile, db: Session) -> tuple[Document, int]:
     # Create topic hierarchy and cards with proper linking
     cards_created = _create_topics_and_cards(deck, document, db)
 
+    # Create text chunks and embeddings for RAG (Quiz Bot feature)
+    chunks_created = 0
+    try:
+        from backend.services.rag import create_and_store_chunks
+        import asyncio
+        
+        print(f"[INGEST] Creating text chunks for RAG...")
+        # Run async function in sync context
+        chunks_created = asyncio.run(create_and_store_chunks(doc_id, full_text, db))
+        print(f"[INGEST] Created {chunks_created} chunks for document {doc_id}")
+    except Exception as e:
+        print(f"[INGEST] Failed to create chunks: {e}")
+        import traceback
+        traceback.print_exc()
+
     db.commit()
     db.refresh(document)
 
